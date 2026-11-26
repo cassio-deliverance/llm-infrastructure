@@ -156,6 +156,7 @@ table.models{border-collapse:collapse;width:100%;font-size:clamp(13px,1vw,15px);
 
 /* ---- remix layer: night stage, neon edges, springy entrances ---- */
 .stage{background:#0A0924}
+.stage,.tags{overflow:clip}
 .stage::before{content:"";position:absolute;inset:-25%;pointer-events:none;background:radial-gradient(38% 34% at 24% 30%,rgba(91,46,255,.5),transparent 72%),radial-gradient(34% 30% at 80% 68%,rgba(242,61,181,.3),transparent 72%),radial-gradient(28% 28% at 62% 12%,rgba(46,230,192,.2),transparent 72%);animation:drift 24s ease-in-out infinite alternate}
 @keyframes drift{to{transform:translate(5%,-4%) rotate(9deg) scale(1.1)}}
 .bignum{position:absolute;right:max(2.4vw,16px);bottom:78px;font:800 clamp(110px,19vw,290px)/.8 var(--f-disp);letter-spacing:-.06em;color:transparent;-webkit-text-stroke:2px rgba(167,139,250,.2);pointer-events:none;user-select:none}
