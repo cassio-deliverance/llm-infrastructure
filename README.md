@@ -16,6 +16,7 @@ Best viewed on a laptop. Use the arrow keys or the Next button to move between s
 - How output is shared between users
 - Sovereign AI: why running your own model matters
 - A reference table of current open-weight models and their licences
+- A closing slide with a QR code for the deck and a link to the handout
 
 ## Notes
 
