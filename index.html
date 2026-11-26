@@ -218,6 +218,9 @@ table.models{font-size:clamp(11px,min(1vw,1.8vh),15px)}
 .qrbtn:hover{transform:translateY(-2px)}
 .qrurl:focus-visible,.qrbtn:focus-visible{outline:2px solid #fff;outline-offset:3px}
 .qrnote{font-size:clamp(12.5px,min(1.05vw,1.9vh),15px);color:var(--muted);max-width:24em}
+.qrwho{display:grid;gap:3px;justify-items:start;margin-top:clamp(4px,1vh,10px);padding-top:clamp(8px,1.5vh,14px);border-top:1px solid var(--line);font-size:clamp(13px,min(1.15vw,2.1vh),16px)}
+.qrwho a{color:var(--ink);text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:4px}
+.qrwho a:focus-visible{outline:2px solid #fff;outline-offset:3px}
 .slide:not([hidden]) .qrrow{animation:rise .6s .28s both}
 @media (max-width:600px){.qrrow{flex-direction:column;align-items:flex-start}}
 </style>
@@ -399,6 +402,7 @@ table.models{font-size:clamp(11px,min(1vw,1.8vh),15px)}
           <a class="qrurl" href="https://cassio-deliverance.github.io/llm-infrastructure/#slide-1" target="_blank" rel="noopener">cassio-deliverance.github.io/<wbr>llm-infrastructure</a>
           <a class="qrbtn" href="https://cassio-deliverance.github.io/llm-infrastructure/LLM-models-and-infrastructure-handout.pdf" target="_blank" rel="noopener" download>Download the handout (PDF)</a>
           <span class="qrnote">19 pages: every slide explained in plain words, with a glossary.</span>
+          <div class="qrwho"><b>Cassio Milani</b><a href="https://www.linkedin.com/in/cassio-milani/" target="_blank" rel="noopener">LinkedIn: linkedin.com/in/cassio-milani</a></div>
         </div>
       </div></div>
     </section>
