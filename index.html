@@ -1,0 +1,1181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="How a language model works, what it takes to run one, and why it matters where it lives. An interactive explainer built around one picture: a book.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="LLM models and infrastructure, explained with a book">
+<meta property="og:description" content="An interactive explainer: parameters, dense vs sparse, reasoning, precision, context windows, memory, GPUs and sovereign AI.">
+<meta property="og:url" content="https://cassio-deliverance.github.io/llm-infrastructure/">
+<meta property="og:image" content="https://cassio-deliverance.github.io/llm-infrastructure/preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="627">
+<meta name="twitter:card" content="summary_large_image">
+<title>LLM Infrastructure Remix</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Unbounded:wght@600;800&display=swap" rel="stylesheet">
+<style>
+/* REMIX of the Deliverance deck: same content and brand violet on navy, turned up: night stage, neon outlines, magenta books, a processor with a face
+   Deliverance brand: palette and faces taken from the company deck theme (navy ink, violet accent, green, off-white)
+   VOICE work, but for a mixed room: a deck someone talks over, so the pictures do the explaining
+   IDEA one metaphor held on every slide: the model is a book, memory is the desk it lies on, speed is how fast the pages turn
+   PICTURE a full-bleed Three.js stage; each slide is one animation, mostly two things side by side
+   COLOUR off-white ground, navy ink; green = CPU, violet = GPU, amber = whatever is being read right now; the cover is navy
+   TYPE Instrument Sans; JetBrains Mono for figures only
+   LAYOUT title and one line top-left, the scene fills the rest, controls bottom-left, next/back bottom-right; same on a phone */
+:root,:root[data-theme="light"],:root[data-theme="dark"]{
+  --bg:#0A0924;--surface:#16133A;--ink:#F7F5F2;--muted:#B9B5CC;--line:#3A3566;
+  --dim:#3A3566;--hot:#FFC53D;--cpu:#2EE6C0;--cpu-ink:#5CF2D0;--gpu:#8F75FF;--gpu-ink:#B6A2FF;--accent:#A78BFA;
+  --warn:#FF3B3B;--uni:#4DA3FF;--board:#2A2658;--cover:#F23DB5;--desk:#1E1A45;--pink:#FF4FA3;
+  --f-sans:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --f-disp:"Unbounded","Instrument Sans",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--f-sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+.app{display:grid;grid-template-rows:auto minmax(0,1fr);height:100%;background:var(--bg);color:var(--ink)}
+.top{display:flex;align-items:center;gap:18px;padding:10px max(2.4vw,16px,env(safe-area-inset-right,0px)) 10px max(2.4vw,16px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line)}
+.brand{font-size:14px;white-space:nowrap;color:var(--muted)}
+.wm{font-weight:700;font-size:17px;letter-spacing:-.02em;color:var(--ink);margin-right:12px}
+.wm i{font-style:normal;color:var(--accent)}
+.eye{font:500 13px/1.2 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 12px}
+.slide[data-id="cover"]{justify-content:center}
+.slide[data-id="cover"] .txt{max-width:min(46em,56%)}
+.slide[data-id="cover"] h1{font-size:clamp(38px,5.6vw,80px);margin-bottom:18px}
+.slide[data-id="cover"] p{font-size:clamp(17px,1.7vw,24px)}
+.cover-logo{display:block;height:clamp(22px,2.4vw,32px);width:auto;margin-bottom:clamp(28px,9vh,90px)}
+.by{margin-top:clamp(20px,4vh,40px);font-size:clamp(15px,1.3vw,18px);font-weight:600;color:var(--ink)}
+.foot{position:absolute;left:max(2.4vw,16px);bottom:calc(26px + env(safe-area-inset-bottom,0px));font-size:14px;color:var(--muted)}
+.prog{display:flex;gap:4px;flex:1;max-width:460px;margin-left:auto}
+.prog button{flex:1;height:22px;border:0;background:none;padding:0;cursor:pointer;position:relative}
+.prog button::after{content:"";position:absolute;left:0;right:0;top:9px;height:4px;border-radius:2px;background:var(--line)}
+.prog button.on::after{background:var(--ink)}
+.prog button.done::after{background:var(--muted)}
+.count{font:500 13px var(--f-mono);color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.stage{position:relative;overflow:hidden;min-height:0;background:radial-gradient(ellipse 70% 60% at 50% 55%,var(--surface) 0%,var(--bg) 75%)}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:pan-y;cursor:grab;display:block}
+.stage canvas:active{cursor:grabbing}
+.tags{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.slide{position:absolute;inset:0;display:flex;flex-direction:column;pointer-events:none;padding:clamp(16px,2.6vh,30px) max(2.4vw,16px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(2.4vw,16px,env(safe-area-inset-left,0px))}
+.slide[hidden]{display:none}
+.txt{max-width:min(42em,68%)}
+h1{font-size:clamp(27px,3.5vw,50px);line-height:1.05;letter-spacing:-.02em;margin:0 0 8px;font-weight:700;text-wrap:balance}
+.txt p{font-size:clamp(16px,1.45vw,20px);line-height:1.4;margin:0;color:var(--muted);max-width:54ch;text-wrap:pretty}
+h1,.txt p,.read{text-shadow:0 0 10px var(--bg),0 0 3px var(--bg)}
+.read{position:absolute;right:max(2.4vw,16px);top:clamp(16px,2.6vh,30px);text-align:right}
+.big{font-size:clamp(17px,1.5vw,21px);color:var(--muted)}
+.big b{font:500 clamp(34px,4.2vw,58px)/1 var(--f-mono);color:var(--ink);letter-spacing:-.03em;font-variant-numeric:tabular-nums;margin-right:8px}
+.sub{font-size:15px;color:var(--muted);margin-top:4px}
+.why{font-size:17px;font-weight:600;margin-top:6px;max-width:24em;margin-left:auto;text-wrap:balance}
+.pick{max-width:min(25em,31%);text-align:left;display:grid;gap:8px;font-size:15px;line-height:1.35;text-shadow:none}
+.pick div{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 12px}
+.pick b{color:var(--accent)}
+.tbar{display:flex;width:min(320px,70vw);height:16px;background:var(--line);border-radius:4px;overflow:hidden;margin:10px 0 6px auto}
+.tbar i{display:block;height:100%;transition:width .35s}
+.tbar .m,.sw.m{background:var(--gpu)}.tbar .c,.sw.c{background:var(--hot)}
+.tleg{font-size:14px;color:var(--muted);display:grid;gap:1px;justify-items:end}
+.tleg b{font:500 14px var(--f-mono);color:var(--ink)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
+.ctl{margin-top:auto;pointer-events:auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-right:210px}
+.ctl span{font-size:14px;color:var(--muted);margin-right:2px}
+.ctl button{min-height:44px;padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:500;font-size:15px}
+.ctl button:hover{border-color:var(--muted)}
+.ctl button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.ctl .seg{display:flex;flex-wrap:wrap;gap:6px}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.recap{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:10px;max-width:31em;pointer-events:auto}
+.recap li{display:grid;grid-template-columns:8.4em 1fr;gap:14px;padding-top:10px;border-top:1px solid var(--line);font-size:clamp(16px,1.35vw,19px);line-height:1.35}
+.recap a{color:var(--accent);font-weight:600;text-decoration:none}
+.recap a:hover{text-decoration:underline}
+.slide[data-id="models"] .txt,.slide[data-id="licences"] .txt{max-width:none}
+.slide[data-id="models"] h1,.slide[data-id="licences"] h1{font-size:clamp(26px,2.8vw,40px);margin-bottom:4px}
+.slide[data-id="models"] .txt p{max-width:none}
+.slide[data-id="licences"] .txt p{max-width:78ch}
+.lic-t{font-size:clamp(14px,1.15vw,16.5px)!important}
+.lic-t td{white-space:normal!important;vertical-align:top;padding-top:clamp(6px,1.1vh,11px)!important;padding-bottom:clamp(6px,1.1vh,11px)!important;line-height:1.4}
+.lic-t td:first-child{white-space:nowrap!important;width:15em}
+.lic-t td span{display:block;font-size:13px;color:var(--muted)}
+.tblwrap{pointer-events:auto;overflow:auto;margin-top:10px;max-width:1320px;min-height:0}
+.lic{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
+.lic.o{background:var(--cpu)}
+.lic.c{background:var(--hot)}
+table.models{border-collapse:collapse;width:100%;font-size:clamp(13px,1vw,15px);background:color-mix(in srgb,var(--surface) 70%,transparent)}
+.models th,.models td{text-align:left;padding:clamp(3px,.62vh,6px) 9px clamp(3px,.62vh,6px) 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.models th{font:500 12.5px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.models td.n,.models th.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.models td b{font-weight:600}
+.tnote{font-size:13px;line-height:1.4;color:var(--muted);margin:8px 0 0;max-width:min(110ch,calc(100% - 190px))}
+.nav{position:absolute;right:max(2.4vw,16px,env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));display:flex;gap:8px}
+.nav button{min-height:44px;padding:8px 18px;border-radius:999px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:600}
+.nav .next{background:var(--accent);color:#fff;border-color:var(--accent)}
+.nav button:disabled{opacity:.35;cursor:default}
+.tag{position:absolute;left:0;top:0;font-size:15px;line-height:1.3;padding:5px 9px;border-radius:7px;white-space:nowrap;background:color-mix(in srgb,var(--bg) 88%,transparent);border:1px solid var(--line);color:var(--ink);transition:opacity .25s}
+.tag b{font-weight:600}
+.tag .num,.tag.num b{font-family:var(--f-mono);font-weight:500}
+.tag:not(.soft)::first-letter{text-transform:uppercase}
+.tag.soft{color:var(--muted);border-color:transparent;background:transparent;text-shadow:0 0 6px var(--bg),0 0 2px var(--bg)}
+.tag.warn{color:var(--warn);border-color:var(--warn)}
+.tag.c{border-color:var(--cpu)}.tag.c b{color:var(--cpu-ink)}
+.tag.g{border-color:var(--gpu)}.tag.g b{color:var(--gpu-ink)}
+.tag.u{border-color:var(--uni)}.tag.u b{color:var(--uni)}
+.tag.say{white-space:normal;width:270px;max-width:44vw}
+.tag.ctr{text-align:center}
+.tag .hd{display:block;margin-bottom:2px}
+.tag .w{display:block;min-height:2.6em;color:var(--muted)}
+.tag .w.num{font-family:var(--f-mono);font-size:14px;white-space:pre-wrap}
+.dials{display:flex;justify-content:center;gap:7px;margin:5px 0 3px}
+.dial{display:grid;justify-items:center;gap:1px;font:12px var(--f-mono);color:var(--muted)}
+.dial circle{fill:var(--surface);stroke:var(--muted);stroke-width:1.5}
+.dial line{stroke:var(--ink);stroke-width:2.2;stroke-linecap:round}
+.dial.on{color:var(--ink)}
+.dial.on circle{stroke:var(--accent);stroke-width:2.2;fill:color-mix(in srgb,var(--hot) 32%,var(--surface))}
+.tag .think{display:block;font:13px/1.35 var(--f-mono);color:var(--muted);border-left:2px solid var(--hot);padding-left:7px;margin:3px 0}
+.tag .vd{display:block;font-weight:600;margin-top:2px}
+.tag .vd.ok{color:var(--cpu-ink)}
+.tag .vd.no{color:var(--warn)}
+.tag .w em{font-style:normal;color:var(--ink);background:color-mix(in srgb,var(--hot) 32%,transparent);border-radius:3px;padding:0 3px}
+.tag .cnt{display:block;font:13px var(--f-mono);color:var(--muted);margin-top:2px}
+.noweb{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--muted)}
+@media (max-width:760px){
+  .txt,.slide[data-id="cover"] .txt{max-width:none}
+  .read{position:static;text-align:left;margin-top:10px}
+  .why{margin-left:0}
+  .pick{max-width:none}
+  .tbar{margin-left:0}.tleg{justify-items:start}
+  .ctl{padding-right:0;padding-bottom:58px}
+  .tag{font-size:13px;padding:3px 6px}
+  .tag.say{width:150px}
+  .recap li{grid-template-columns:1fr;gap:2px}
+  .brand{display:none}.prog{max-width:none;margin-left:0}
+}
+
+/* ---- remix layer: night stage, neon edges, springy entrances ---- */
+.stage{background:#0A0924}
+.stage::before{content:"";position:absolute;inset:-25%;pointer-events:none;background:radial-gradient(38% 34% at 24% 30%,rgba(91,46,255,.5),transparent 72%),radial-gradient(34% 30% at 80% 68%,rgba(242,61,181,.3),transparent 72%),radial-gradient(28% 28% at 62% 12%,rgba(46,230,192,.2),transparent 72%);animation:drift 24s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translate(5%,-4%) rotate(9deg) scale(1.1)}}
+.bignum{position:absolute;right:max(2.4vw,16px);bottom:78px;font:800 clamp(110px,19vw,290px)/.8 var(--f-disp);letter-spacing:-.06em;color:transparent;-webkit-text-stroke:2px rgba(167,139,250,.2);pointer-events:none;user-select:none}
+h1{font-family:var(--f-disp);font-weight:800;font-size:clamp(23px,2.85vw,43px);line-height:1.1;letter-spacing:-.035em}
+.eye{display:inline-block;background:linear-gradient(90deg,#5B2EFF,#F23DB5);color:#fff;padding:5px 12px;border-radius:999px;font-size:11.5px;letter-spacing:.13em;margin-bottom:14px}
+.slide:not([hidden]) .eye{animation:rise .5s both}
+.slide:not([hidden]) h1{animation:rise .65s .07s both cubic-bezier(.2,1.5,.4,1)}
+.slide:not([hidden]) .txt p,.slide:not([hidden]) .recap,.slide:not([hidden]) .tblwrap,.slide:not([hidden]) .by{animation:rise .6s .17s both}
+.slide:not([hidden]) .read,.slide:not([hidden]) .ctl{animation:rise .6s .3s both}
+@keyframes rise{from{opacity:0;transform:translateY(26px) rotate(-1.4deg)}}
+.slide[data-id="cover"] h1{font-size:clamp(32px,4.9vw,74px);background:linear-gradient(92deg,#F7F5F2 20%,#B6A2FF 60%,#F23DB5);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none}
+.ctl button,.nav button{background:rgba(22,19,58,.78);border-color:#4A4580;color:var(--ink);transition:transform .15s,box-shadow .15s}
+.ctl button:hover,.nav button:hover{transform:translateY(-2px);border-color:var(--accent)}
+.ctl button[aria-pressed="true"],.nav .next{background:linear-gradient(90deg,#5B2EFF,#F23DB5);border-color:transparent;color:#fff;box-shadow:0 0 20px rgba(143,117,255,.55)}
+.prog button::after{height:6px;top:8px;border-radius:3px}
+.prog button.on::after{background:linear-gradient(90deg,#8F75FF,#F23DB5);box-shadow:0 0 12px #8F75FF}
+.prog button.done::after{background:#6A5FB0}
+.tag{background:rgba(14,11,44,.84);border-color:#4A4580;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.tag.say{border-color:#8F75FF;box-shadow:0 0 0 1px rgba(143,117,255,.35),0 0 26px rgba(143,117,255,.38)}
+.tag.soft{background:transparent;box-shadow:none}
+.tag .w em{display:inline-block;background:linear-gradient(90deg,#FFC53D,#FF4FA3);color:#0A0924;font-weight:700;animation:pop .38s cubic-bezier(.2,1.7,.4,1)}
+@keyframes pop{from{transform:scale(.15) rotate(-14deg)}}
+.pick div,.models{background:rgba(22,19,58,.8)}
+.big b{background:linear-gradient(90deg,#FFC53D,#FF4FA3);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none}
+.tbar{background:#2A2658}
+@media (prefers-reduced-motion:reduce){.stage::before,.slide:not([hidden]) *{animation:none!important}}
+@media (max-width:760px){.bignum{display:none}}
+
+/* ---- fit: type follows the screen height as well as its width, so short laptop screens keep room for the scene ---- */
+h1{font-size:clamp(20px,min(2.85vw,4.6vh),43px)}
+.txt p{font-size:clamp(13.5px,min(1.45vw,2.35vh),20px)}
+.slide[data-id="cover"] h1{font-size:clamp(30px,min(4.9vw,8.6vh),74px)}
+.slide[data-id="cover"] .txt p{font-size:clamp(15px,min(1.7vw,2.9vh),24px)}
+.slide[data-id="models"] h1,.slide[data-id="licences"] h1{font-size:clamp(20px,min(2.8vw,4.4vh),40px)}
+.big b{font-size:clamp(26px,min(4.2vw,6.6vh),58px)}
+.big{font-size:clamp(13.5px,min(1.5vw,2.4vh),21px)}
+.why{font-size:clamp(13px,min(1.2vw,2.2vh),17px)}
+.pick{font-size:clamp(12px,min(1.05vw,1.9vh),15px)}
+.pick div{padding:clamp(5px,1vh,9px) 12px}
+.tag{font-size:clamp(11.5px,min(1.04vw,1.9vh),15px);will-change:transform}
+.tag .cnt,.tag .think{font-size:.87em}
+.tag.say{width:clamp(180px,19vw,270px)}
+.ctl button,.nav button{min-height:clamp(36px,5.6vh,44px);font-size:clamp(13px,min(1.05vw,2vh),15px)}
+.recap li{font-size:clamp(13.5px,min(1.35vw,2.4vh),19px);padding-top:clamp(5px,1.1vh,10px)}
+.recap{gap:clamp(5px,1.1vh,10px)}
+table.models{font-size:clamp(11px,min(1vw,1.8vh),15px)}
+.lic-t{font-size:clamp(12px,min(1.15vw,2vh),16.5px)!important}
+.tblwrap{margin-bottom:58px}
+.tnote{font-size:clamp(11px,1.75vh,13px);max-width:none;margin-top:6px}
+.eye{margin-bottom:clamp(6px,1.4vh,14px)}
+</style>
+</head>
+<body style="margin:0">
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="wm"><i>/</i>deliverance<i>.ai</i></span>LLM models and infrastructure</div>
+    <div class="prog" id="prog" aria-label="Slides"></div>
+    <div class="count" id="count">1 / 17</div>
+  </header>
+  <div class="stage" id="stage">
+    <div class="bignum" id="bignum" aria-hidden="true">01</div>
+    <canvas id="c" aria-label="3D animation for the current slide"></canvas>
+    <div class="tags" id="tags"></div>
+
+    <section class="slide" data-id="cover" data-lift="0">
+      <div class="txt"><img class="cover-logo" alt="/deliverance.ai" src="data:image/png;base64,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">
+      <h1>LLM models and infrastructure</h1>
+      <p>How a language model works, what it takes to run one, and why it matters where it lives. Explained with one picture: a book.</p>
+      <div class="by">Cassio Milani · 26 November 2026</div></div>
+      <div class="foot">/deliverance.ai · LLM models and infrastructure</div>
+    </section>
+
+    <section class="slide" data-id="intro" hidden>
+      <div class="txt"><div class="eye">The idea</div><h1>An LLM or SLM is a book of numbers</h1>
+      <p>LLM means large language model; SLM means small language model. Either one is a book of numbers loaded into memory. To write one word, the processor (a CPU or a GPU) reads the whole book. For the next word, it reads the whole book again.</p></div>
+      <div class="ctl"><span>CPU: the general-purpose processor in every computer. GPU: a processor built to do a huge number of sums at once.</span></div>
+    </section>
+
+    <section class="slide" data-id="params" hidden>
+      <div class="txt"><div class="eye">LLM models</div><h1>LLM parameters: how big the book is</h1>
+      <p>An LLM parameter is one tiny dial that training set to the right position. Each number in the book records one dial's setting. A 20B model has 20 billion dials. A 200B model has ten times as many.</p></div>
+      <div class="ctl"><span>More dials: more it can know, more to store, and more to read for every word.</span></div>
+    </section>
+
+    <section class="slide" data-id="chap" hidden>
+      <div class="txt"><div class="eye">LLM models</div><h1>Dense vs sparse: the reading race</h1>
+      <p>Both must write the same 14 words. Dense reads the whole book for every word. Sparse splits its book into chapters, and a built-in index picks the 4 each word needs: about 14 times less reading.</p></div>
+      <div class="read pick"><div><b>Pick dense</b> when you do not have much memory. Every word uses everything the model knows, so you get the best answers for the space it takes.</div><div><b>Pick sparse</b> when you need fast answers. It needs a lot of memory, but it answers like a bigger model at the speed of a small one.</div></div>
+    </section>
+
+    <section class="slide" data-id="reason" hidden>
+      <div class="txt"><div class="eye">LLM models</div><h1>Reasoning or not: thinking before answering</h1>
+      <p>A reasoning model writes out its working before it answers. Each thinking word costs a full read of the book, just like an answer word, so it is slower but gets hard questions right more often.</p></div>
+      <div class="read pick"><div><b>Pick reasoning</b> for hard, multi-step questions: planning, maths, finding the cause of a fault.</div><div><b>Pick no reasoning</b> for simple jobs: summaries, lookups, chat. The answer arrives several times sooner.</div></div>
+    </section>
+
+    <section class="slide" data-id="bits" hidden>
+      <div class="txt"><div class="eye">LLM models</div><h1>Precision: how fine each dial is</h1>
+      <p>The same model, with the same number of dials, can be saved at different precision. Bits decide how finely each dial is set: with fewer bits a dial has fewer clicks, its setting is a little rounder, and the book is much thinner.</p></div>
+      <div class="read pick"><div><b>Pick more bits</b> when every detail of the answer matters and you have plenty of memory.</div><div><b>Pick fewer bits</b> when the book has to fit a smaller desk or answers must come faster. Going down to 4 bits costs only a little quality.</div></div>
+    </section>
+
+    <section class="slide" data-id="ctx" hidden>
+      <div class="txt"><div class="eye">LLM models</div><h1>Context window: how much it can read at once</h1>
+      <p>The context window is the model's notepad. Your question, your documents and the conversation so far must all fit on it. What does not fit, the model cannot see.</p></div>
+      <div class="read pick"><div><b>Pick a big window</b> for long documents, long conversations and agents that work through many steps.</div><div><b>Pick a small window</b> for short questions. A fuller notepad needs more memory and more reading time.</div></div>
+      <div class="ctl"><span>The job</span><div class="seg" data-s="ctx" data-key="job">
+        <button data-v="quick">A quick question</button><button data-v="report">A 25-page report</button><button data-v="contracts">300 pages of contracts</button><button data-v="code">A whole codebase</button></div><span>K is thousand tokens, M is million. Sizes are rough examples.</span></div>
+    </section>
+
+    <section class="slide" data-id="load" hidden>
+      <div class="txt"><div class="eye">Infrastructure</div><h1>Memory size: will the book fit on the desk?</h1>
+      <p>Memory is the desk. The whole book has to fit on it, with a little room to work, or the model cannot run. A CPU uses the server's main memory: a very big desk. A GPU card brings its own desk: smaller, and fixed in size.</p></div>
+      <div class="ctl"><span>Pick a book</span><div class="seg" data-s="load" data-key="size">
+        <button data-v="20">Small book · 20 GB</button><button data-v="61">Medium book · 61 GB</button><button data-v="235">Large book · 235 GB</button></div><span>Desk sizes are examples</span></div>
+    </section>
+
+    <section class="slide" data-id="read" hidden>
+      <div class="txt"><div class="eye">Infrastructure</div><h1>Memory speed: how fast the pages turn</h1>
+      <p>Size is not the whole story: memory also sets how fast the pages turn. A CPU server's memory turns a few pages at a time. A GPU card's memory turns many at once, so the words arrive about 20 times faster.</p></div>
+      <div class="read"><div class="big"><b>20×</b>faster on the GPU card</div><div class="sub">same book, same sentence, same words</div></div>
+      <div class="ctl"><span>Amber dots are pages open at the same time: 5 on the CPU server, 100 on the GPU card.</span></div>
+    </section>
+
+    <section class="slide" data-id="chip" hidden>
+      <div class="txt"><div class="eye">Infrastructure</div><h1>Memory matters more than the processor</h1>
+      <p>The processor (a CPU or a GPU) is a very fast reader, but it can only read as fast as memory turns the pages. Most of the time it is waiting. Try making each part twice as fast.</p></div>
+      <div class="read"><div class="big"><b id="r-chip-rate">1.00</b>words a second</div>
+        <div class="why" id="r-chip-why"></div>
+        <div class="tbar"><i class="m" id="tb-m"></i><i class="c" id="tb-c"></i></div>
+        <div class="tleg"><span>the time one word takes:</span><span><i class="sw m"></i>processor waiting for pages</span><span><i class="sw c"></i>processor reading</span></div></div>
+      <div class="ctl"><button class="tog" data-s="chip" data-key="chip" aria-pressed="false">Make the processor 2× faster</button>
+        <button class="tog" data-s="chip" data-key="mem" aria-pressed="false">Make the memory 2× faster</button><span>Timing is illustrative</span></div>
+    </section>
+
+    <section class="slide" data-id="unified" hidden>
+      <div class="txt"><div class="eye">Infrastructure</div><h1>Unified memory: one desk for both</h1>
+      <p>In most machines the CPU and the GPU each have their own desk. With unified memory they share one big desk: bigger books fit in one small machine, but the pages turn slower than on a GPU card.</p></div>
+      <div class="read pick"><div><b>Pick unified memory</b> to run a big model on one small machine, for one person or a small team.</div><div><b>Pick GPU cards</b> to serve many people at once. Their pages turn faster, and you can add more cards later.</div></div>
+      <div class="ctl"><span>Examples: Apple’s M-series Macs, Nvidia DGX Spark, AMD Ryzen AI Max. Sizes and speeds shown are examples.</span></div>
+    </section>
+
+    <section class="slide" data-id="split" hidden>
+      <div class="txt"><div class="eye">Infrastructure</div><h1>Too big for one card? Split the book</h1>
+      <p>A book too big for one GPU card is cut into parts, one part per card, in one server or several. To write a word, the work is handed from card to card, like a relay. If the hand-over is slow, every word is slow.</p></div>
+      <div class="read"><div class="big"><b id="r-split-x">1.8×</b>slower with a slow link</div><div class="sub" id="r-split-why"></div></div>
+      <div class="ctl"><div class="seg" data-s="split" data-key="n"><button data-v="2">Split across 2 cards</button><button data-v="4">Split across 4 cards</button></div><span>InfiniBand is a very fast network that links AI servers. Inside one server the fast link is usually NVLink. Timing is illustrative.</span></div>
+    </section>
+
+    <section class="slide" data-id="share" hidden>
+      <div class="txt"><div class="eye">Infrastructure</div><h1>Everyone shares the same output</h1>
+      <p>Everyone who asks is sharing one model. It writes 200 words a minute in total, however many people are asking. The more people at once, the fewer words each one gets.</p></div>
+      <div class="read"><div class="big"><b id="r-share-each">100</b>words a minute each</div>
+        <div class="why" id="r-share-why"></div>
+        <div class="sub" id="r-share-sub">200 words ÷ 2 people</div></div>
+      <div class="ctl"><span>People asking at once</span><div class="seg" data-s="share" data-key="n">
+        <button data-v="1">1</button><button data-v="2">2</button><button data-v="5">5</button><button data-v="10">10</button><button data-v="25">25</button><button data-v="50">50</button><button data-v="100">100</button></div><span>Engineers count in tokens: a token is roughly a word</span></div>
+    </section>
+
+    <section class="slide" data-id="sov" hidden>
+      <div class="txt"><div class="eye">Sovereign AI</div><h1>Sovereign AI: rent the book, or own it?</h1>
+      <p id="sov-cap">With a rented AI, your questions and documents leave your building. Depending on the provider and the laws it answers to, they may be kept, used to train its model, or read by others. With your own, they never leave.</p></div>
+      <div class="ctl"><span>Sovereign AI means the model runs on machines you control. Why it matters:</span><div class="seg" data-s="sov" data-key="mode">
+        <button data-v="privacy">Privacy</button><button data-v="control">Control</button><button data-v="cost">Cost</button><button data-v="origin">Where the model comes from</button></div><span id="sov-note"></span></div>
+    </section>
+
+    <section class="slide" data-id="recap" data-lift="0" hidden>
+      <div class="txt"><div class="eye">Summary</div><h1>Seven things to remember</h1>
+      <ul class="recap">
+        <li><a href="#slide-2">What a model is</a><span>A book of numbers. To write one word, the processor reads the whole book.</span></li>
+        <li><a href="#slide-3">How big it is</a><span>More parameters, a bigger book: it knows more, and it is slower.</span></li>
+        <li><a href="#slide-7">What it can see</a><span>The context window: your question and documents must fit in it.</span></li>
+        <li><a href="#slide-8">Will it fit</a><span>The whole book must fit in memory. A GPU card's memory is fixed in size.</span></li>
+        <li><a href="#slide-9">How fast it is</a><span>Fast memory means fast words. Memory matters more than the processor.</span></li>
+        <li><a href="#slide-13">How many people</a><span>Everyone shares the same output. More people, fewer words each.</span></li>
+        <li><a href="#slide-14">Why own it</a><span>Your data stays in your building, whoever made the model.</span></li>
+      </ul></div>
+    </section>
+
+    <section class="slide" data-id="models" data-lift="0" hidden>
+      <div class="txt"><div class="eye">Reference</div><h1>Open-weight models today</h1>
+      <p>The main models you can download and run yourself, as of late November 2026.</p></div>
+      <div class="tblwrap"><table class="models">
+        <thead><tr><th>Model</th><th>Maker</th><th>Country</th><th class="n">Released</th><th>LLM or SLM</th><th class="n">Parameters</th><th class="n">Context</th><th>Dense or sparse, per word</th><th>Reasoning</th><th>Licence</th></tr></thead>
+        <tbody>
+          <tr><td><b>Kimi K3</b></td><td>Moonshot AI</td><td>China</td><td class="n">2026</td><td>LLM</td><td class="n">2.8T</td><td class="n">1M</td><td>Sparse: reads about 104B</td><td>Yes</td><td><i class="lic c"></i>Conditions (own licence)</td></tr>
+          <tr><td><b>Qwen3.8 (2.4T)</b></td><td>Alibaba</td><td>China</td><td class="n">2026</td><td>LLM</td><td class="n">2.4T</td><td class="n">Not confirmed</td><td>Sparse: reads about 95B</td><td>Yes*</td><td><i class="lic c"></i>Conditions (own licence)</td></tr>
+          <tr><td><b>DeepSeek V4.1 Flash</b></td><td>DeepSeek</td><td>China</td><td class="n">2026</td><td>LLM</td><td class="n">552B</td><td class="n">1M</td><td>Sparse: reads 8B to 16B</td><td>Yes, optional</td><td><i class="lic o"></i>Open (MIT)</td></tr>
+          <tr><td><b>GLM-5.3</b></td><td>Z.ai</td><td>China</td><td class="n">2026</td><td>LLM</td><td class="n">about 745B</td><td class="n">1M</td><td>Sparse: reads about 40B</td><td>Yes, always on</td><td><i class="lic c"></i>Conditions (own licence)</td></tr>
+          <tr><td><b>Mistral Large 4</b></td><td>Mistral AI</td><td>France</td><td class="n">2026</td><td>LLM</td><td class="n">about 1T</td><td class="n">1M</td><td>Sparse: reads about 50B</td><td>Yes, three levels</td><td><i class="lic c"></i>Conditions (own licence)</td></tr>
+          <tr><td><b>Muse Spark Open</b></td><td>Meta</td><td>United States</td><td class="n">2026</td><td>LLM</td><td class="n">816B</td><td class="n">1M</td><td>Sparse: reads 42B</td><td>Not confirmed</td><td><i class="lic c"></i>Conditions (own licence)</td></tr>
+          <tr><td><b>gpt-oss-120b</b></td><td>OpenAI</td><td>United States</td><td class="n">2025</td><td>LLM</td><td class="n">117B</td><td class="n">131K</td><td>Sparse: reads about 5B</td><td>Yes, three levels</td><td><i class="lic o"></i>Open (Apache 2.0)</td></tr>
+          <tr><td><b>Llama 3.3 70B</b></td><td>Meta</td><td>United States</td><td class="n">2024</td><td>LLM</td><td class="n">70B</td><td class="n">128K</td><td>Dense: reads all 70B</td><td>No</td><td><i class="lic c"></i>Conditions (own licence)</td></tr>
+          <tr><td><b>Gemma 4 31B</b></td><td>Google</td><td>United States</td><td class="n">2026</td><td>SLM</td><td class="n">31B</td><td class="n">256K</td><td>Dense: reads all 31B</td><td>Yes</td><td><i class="lic o"></i>Open (Apache 2.0)</td></tr>
+          <tr><td><b>Qwen3.8-27B</b></td><td>Alibaba</td><td>China</td><td class="n">2026</td><td>SLM</td><td class="n">27B</td><td class="n">262K</td><td>Dense: reads all 27B</td><td>Not confirmed</td><td><i class="lic o"></i>Open (Apache 2.0)</td></tr>
+          <tr><td><b>gpt-oss-20b</b></td><td>OpenAI</td><td>United States</td><td class="n">2025</td><td>SLM</td><td class="n">21B</td><td class="n">131K</td><td>Sparse: reads about 4B</td><td>Yes, three levels</td><td><i class="lic o"></i>Open (Apache 2.0)</td></tr>
+          <tr><td><b>Ministral 3 14B</b></td><td>Mistral AI</td><td>France</td><td class="n">2025</td><td>SLM</td><td class="n">14B</td><td class="n">256K</td><td>Dense: reads all 14B</td><td>Separate version</td><td><i class="lic o"></i>Open (Apache 2.0)</td></tr>
+          <tr><td><b>Phi-4-mini</b></td><td>Microsoft</td><td>United States</td><td class="n">2025</td><td>SLM</td><td class="n">3.8B</td><td class="n">128K</td><td>Dense: reads all 3.8B</td><td>Separate version</td><td><i class="lic o"></i>Open (MIT)</td></tr>
+        </tbody>
+      </table>
+      <p class="tnote">B is billion, T is trillion. Context is the context window in tokens (K thousand, M million). SLM here means about 30 billion parameters or fewer. * Reported for the hosted version. Figures are from public reporting and some sources disagree: check each model card. Open: any commercial use is allowed. Conditions: the maker's own licence, listed on the next slide.</p></div>
+    </section>
+
+    <section class="slide" data-id="licences" data-lift="0" hidden>
+      <div class="txt"><div class="eye">Reference</div><h1>What the licence conditions are</h1>
+      <p>For the six models marked "Conditions" on the previous slide, as reported. If you run the model inside your own organisation, most of these do not apply to you.</p></div>
+      <div class="tblwrap"><table class="models lic-t">
+        <thead><tr><th>Model</th><th>The condition, in plain words</th></tr></thead>
+        <tbody>
+          <tr><td><b>Kimi K3</b><span>Moonshot AI · China</span></td><td>A separate agreement is needed to sell it as a hosted service above about $20M in revenue, plus a branding requirement at very large scale. Internal use is exempt.</td></tr>
+          <tr><td><b>Qwen3.8 (2.4T)</b><span>Alibaba · China</span></td><td>A separate licence is needed for a hosted-service business above about $50M in revenue, and the model name must be shown at very large scale. Internal use is unrestricted.</td></tr>
+          <tr><td><b>GLM-5.3</b><span>Z.ai · China</span></td><td>Companies above $10 billion in revenue that host it as a service must pass Z.ai's security review.</td></tr>
+          <tr><td><b>Mistral Large 4</b><span>Mistral AI · France</span></td><td>A separate commercial licence is needed to sell it as a hosted service. Internal use and features built into your own product are exempt.</td></tr>
+          <tr><td><b>Muse Spark Open</b><span>Meta · United States</span></td><td>A "Built with Muse Spark Open" notice is required, and commercial terms apply above a revenue threshold, reported as $20M.</td></tr>
+          <tr><td><b>Llama 3.3 70B</b><span>Meta · United States</span></td><td>Meta's community licence: an acceptable-use policy applies, and very large companies need a separate licence from Meta. Not re-checked for this deck.</td></tr>
+        </tbody>
+      </table>
+      <p class="tnote">Taken from news coverage and analysis, not from the licence files themselves. Thresholds and wording may differ, so read the actual licence before you commit to a model.</p></div>
+    </section>
+
+    <nav class="nav"><button id="prev" aria-label="Back">←</button><button class="next" id="next">Next →</button></nav>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+{
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const stage = $('#stage'), canvas = $('#c'), tagsEl = $('#tags');
+const sections = $$('.slide'), IDS = sections.map(s => s.dataset.id);
+const ST = {sov:{mode:'privacy'}, ctx:{job:'report'}, load:{size:'61'}, chip:{chip:false, mem:false}, split:{n:'2'}, share:{n:'2'}};
+const SENT = 'Hello! I am a language model. I write one word at a time, and I read my whole book again for every single word.'.split(' ');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const R = (id, t) => { const e = document.getElementById(id); if (e) e.textContent = t; };
+let seed = 11; const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+let idx = 0, cur = null;
+
+/* ---------- controls ---------- */
+function syncPressed(){
+  $$('[data-key]').forEach(c => {
+    const s = c.dataset.s, k = c.dataset.key;
+    if (c.classList.contains('tog')) c.setAttribute('aria-pressed', ST[s][k] ? 'true' : 'false');
+    else c.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === ST[s][k] ? 'true' : 'false'));
+  });
+}
+document.addEventListener('click', e => {
+  const tg = e.target.closest('.tog');
+  setTimeout(measure, 80);
+  if (tg){ const s = tg.dataset.s, k = tg.dataset.key; ST[s][k] = !ST[s][k]; syncPressed(); cur && cur.on && cur.on(k); return; }
+  const b = e.target.closest('[data-key] button');
+  if (b){ const c = b.closest('[data-key]'); ST[c.dataset.s][c.dataset.key] = b.dataset.v; syncPressed(); cur && cur.on && cur.on(c.dataset.key); }
+});
+
+/* ---------- stage ---------- */
+let renderer;
+try { renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true}); }
+catch (err) { stage.insertAdjacentHTML('beforeend', '<div class="noweb">This browser could not start 3D graphics, so the animations cannot play here.</div>'); }
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(36, 1, .1, 400);
+const world = new THREE.Group(); scene.add(world);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x6a5fb0, .58));
+const sun = new THREE.DirectionalLight(0xffffff, .5); sun.position.set(5, 10, 7); scene.add(sun);
+const rim = new THREE.DirectionalLight(0xF23DB5, .25); rim.position.set(-6, 4, -5); scene.add(rim);
+const BOX = new THREE.BoxGeometry(1, 1, 1), PAPER = new THREE.Color('#F4F1EA');
+const C = {}, tc = new THREE.Color();
+function readColors(){
+  const cs = getComputedStyle(stage);
+  ['ink','muted','line','dim','hot','cpu','gpu','uni','warn','board','cover','desk','bg','surface','pink'].forEach(n => C[n] = new THREE.Color(cs.getPropertyValue('--' + n).trim() || '#888'));
+}
+readColors();
+const Mt = (c, o = {}) => { const {roughness, metalness, ...r} = o; return new THREE.MeshToonMaterial(Object.assign({color:c}, r)); };
+const EDGE = new THREE.EdgesGeometry(BOX), WHITE = new THREE.Color(0xffffff);
+function box(w, h, d, c, o, x = 0, y = 0, z = 0, parent = world){
+  const m = new THREE.Mesh(BOX, Mt(c, o)); m.scale.set(w, h, d); m.position.set(x, y, z); parent.add(m);
+  if (Math.max(w, h, d) >= .45 && !(o && o.transparent)) m.add(new THREE.LineSegments(EDGE, new THREE.LineBasicMaterial({color:new THREE.Color(c).lerp(WHITE, .55), transparent:true, opacity:.9})));
+  return m;
+}
+function anchor(x, y, z, parent = world){ const o = new THREE.Object3D(); o.position.set(x, y, z); parent.add(o); return o; }
+let tags = [];
+function tag(anc, html, cls = '', mode = 'up'){
+  const el = document.createElement('div'); el.className = 'tag ' + cls; el.innerHTML = html; el.style.opacity = 0; tagsEl.appendChild(el);
+  const t = {el, anc, mode, off:false}; tags.push(t); return t;
+}
+function sentence(t, n, head){
+  let h = '';
+  for (let i = Math.max(0, n - 7); i < n; i++){ const w = SENT[i % SENT.length]; h += (i === n - 1 ? '<em>' + w + '</em>' : w) + ' '; }
+  if (n > 0) burstAt(t.anc, 12, -.75);
+  t.el.innerHTML = (head ? '<b class="hd">' + head + '</b>' : '') + '<span class="w">' + (h || '…') + '</span><span class="cnt">' + n + (n === 1 ? ' word' : ' words') + ' written</span>';
+}
+
+/* ---------- remix: stage dressing and helpers ---------- */
+const UP = new THREE.Vector3(0, 1, 0), v3 = new THREE.Vector3();
+scene.fog = new THREE.Fog(0x0A0924, 34, 82);
+const grid = new THREE.GridHelper(140, 140, 0x8F75FF, 0x3D2FA0); grid.material.transparent = true; grid.material.opacity = .3; grid.position.y = -.04; scene.add(grid);
+const stars = (() => {
+  const n = 320, p = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++){ const a = rnd() * 6.283, r = 26 + rnd() * 40; p[i * 3] = Math.cos(a) * r; p[i * 3 + 1] = 3 + rnd() * 30; p[i * 3 + 2] = Math.sin(a) * r; }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  const m = new THREE.Points(g, new THREE.PointsMaterial({color:0xCFC4FF, size:.16, transparent:true, opacity:.75, fog:false})); scene.add(m); return m;
+})();
+let glowTex;
+function glowT(){
+  if (glowTex) return glowTex;
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'), g = x.createRadialGradient(64, 64, 4, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(.4, 'rgba(255,255,255,.28)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+  return glowTex = new THREE.CanvasTexture(c);
+}
+/* confetti: a pool of little cubes thrown out whenever a word lands */
+const BN = 220, BCOL = [0xFFC53D, 0xF23DB5, 0x8F75FF, 0x2EE6C0, 0xFFFFFF].map(h => new THREE.Color(h));
+const bm = new THREE.InstancedMesh(new THREE.BoxGeometry(.075, .075, .075), new THREE.MeshBasicMaterial({color:0xffffff, fog:false}), BN); bm.frustumCulled = false; scene.add(bm);
+const bp = Array.from({length:BN}, (_, i) => { bm.setColorAt(i, BCOL[i % 5]); return {life:0, p:new THREE.Vector3(), v:new THREE.Vector3(), r:rnd() * 6}; });
+const bd = new THREE.Object3D();
+function burstAt(obj, n = 12, dy = 0){
+  if (reduce) return;
+  obj.getWorldPosition(v3); v3.y += dy;
+  for (let i = 0, k = 0; i < BN && k < n; i++){ const q = bp[i]; if (q.life > 0) continue; k++;
+    q.life = .7 + Math.random() * .5; q.p.copy(v3); const a = Math.random() * 6.283, sp = 1.2 + Math.random() * 2.6; q.v.set(Math.cos(a) * sp, 1.5 + Math.random() * 3, Math.sin(a) * sp * .7); }
+}
+function stepBursts(dt){
+  for (let i = 0; i < BN; i++){ const q = bp[i];
+    if (q.life > 0){ q.life -= dt; q.v.y -= dt * 7; q.p.addScaledVector(q.v, dt); bd.position.copy(q.p); bd.rotation.set(q.r + q.life * 9, q.r, q.life * 7); bd.scale.setScalar(Math.max(0, Math.min(1, q.life * 2.2))); }
+    else bd.scale.setScalar(0);
+    bd.updateMatrix(); bm.setMatrixAt(i, bd.matrix); }
+  bm.instanceMatrix.needsUpdate = true;
+}
+/* numbers rising off the pages: the book really is full of them */
+const numTexs = [];
+function fountain(x, y, z, n = 14, spread = 1.1){
+  if (!numTexs.length) ['0.12', '−0.87', '0.71', '0.05', '−0.33', '0.94', '1.00', '0.42'].forEach(t => {
+    const c = document.createElement('canvas'); c.width = 160; c.height = 64; const g = c.getContext('2d');
+    g.font = '700 40px ui-monospace,Menlo,monospace'; g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(t, 80, 34); numTexs.push(new THREE.CanvasTexture(c)); });
+  const S = Array.from({length:n}, (_, i) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:numTexs[i % numTexs.length], color:BCOL[i % 5], transparent:true, depthWrite:false, opacity:0}));
+    sp.scale.set(.62, .25, 1); world.add(sp); return {sp, u:Math.random(), dx:(Math.random() - .5) * spread * 2, dz:(Math.random() - .5) * spread, s:.16 + Math.random() * .14}; });
+  return dt => S.forEach(o => { o.u = (o.u + dt * o.s) % 1; o.sp.position.set(x + o.dx * (.4 + o.u * .8), y + o.u * 2.7, z + o.dz); o.sp.material.opacity = Math.sin(Math.PI * o.u) * .95; });
+}
+/* a page of numbers, drawn once and shared by every book */
+let pageTex;
+function numTex(){
+  if (pageTex) return pageTex;
+  const c = document.createElement('canvas'); c.width = 256; c.height = 352;
+  const x = c.getContext('2d'); x.fillStyle = '#FDFCFA'; x.fillRect(0, 0, 256, 352);
+  x.fillStyle = '#16133A'; x.font = '500 17px ui-monospace,Menlo,monospace';
+  for (let r = 0; r < 15; r++) for (let k = 0; k < 4; k++){ const v = (rnd() * 2 - 1).toFixed(2); x.fillText((v >= 0 ? ' ' : '') + v, 12 + k * 61, 30 + r * 22); }
+  pageTex = new THREE.CanvasTexture(c); pageTex.anisotropy = 4; return pageTex;
+}
+/* an open book whose pages flip: pos 0 = all pages on the right, 1 = all on the left */
+function openBook(o = {}){
+  const w = o.w || 1, d = o.d || 1.35, K = o.K || 14, sh = o.stack || .1, eps = .012, g = new THREE.Group(); world.add(g);
+  const cover = box(w * 2 + .14, .05, d + .12, C.cover, {roughness:.8}, 0, .025, 0, g);
+  box(w - .02, sh, d, PAPER, {roughness:.95}, -w / 2 - .005, .05 + sh / 2, 0, g);
+  box(w - .02, sh, d, PAPER, {roughness:.95}, w / 2 + .005, .05 + sh / 2, 0, g);
+  const geo = new THREE.PlaneGeometry(w, d); geo.rotateX(-Math.PI / 2); geo.translate(w / 2, 0, 0);
+  const mat = new THREE.MeshStandardMaterial({map:numTex(), side:THREE.DoubleSide, roughness:.9});
+  const piv = [];
+  for (let i = 0; i < K; i++){ const p = new THREE.Group(); p.add(new THREE.Mesh(geo, mat)); g.add(p); piv.push(p); }
+  const hg = new THREE.PlaneGeometry(w * 5.2, d * 3.2); hg.rotateX(-Math.PI / 2);
+  const halo = new THREE.Mesh(hg, new THREE.MeshBasicMaterial({map:glowT(), color:C.gpu, transparent:true, opacity:.75, blending:THREE.AdditiveBlending, depthWrite:false})); halo.position.y = .012; g.add(halo);
+  const b = {g, cover, pos:0, dir:1, w, d};
+  b.set = pos => {
+    b.pos = pos;
+    for (let i = 0; i < K; i++){
+      const f = Math.min(1, Math.max(0, (pos - (i / K) * .72) / .28)), e = f * f * (3 - 2 * f);
+      piv[i].rotation.z = e * Math.PI; piv[i].position.y = .056 + sh + ((K - 1 - i) * (1 - e) + i * e) * eps;
+    }
+  };
+  b.step = (dt, T) => { /* true each time the whole book has been read once */
+    let p = b.pos + b.dir * dt / T, done = false;
+    if (p >= 1){ p = 1; b.dir = -1; done = true; } else if (p <= 0){ p = 0; b.dir = 1; done = true; }
+    b.set(p); return done;
+  };
+  b.set(0); return b;
+}
+function closedBook(w, h, d){
+  const g = new THREE.Group(); world.add(g);
+  g.userData.cov = [box(w, .04, d, C.cover, {roughness:.75}, 0, .02, 0, g), box(w, .04, d, C.cover, {roughness:.75}, 0, h - .02, 0, g), box(.05, h, d, C.cover, {roughness:.75}, -w / 2 + .025, h / 2, 0, g)];
+  box(w - .1, Math.max(.01, h - .08), d - .08, PAPER, {roughness:.95}, .02, h / 2, 0, g);
+  return g;
+}
+
+/* camera: aim at a point from a distance tuned for a 3:2 view, kept clear of the title and the controls */
+let W = 1, H = 1, lastAim = null, free = {top:0, bot:70};
+const camGoal = {pos:new THREE.Vector3(0, 4, 12), look:new THREE.Vector3()}, camLook = new THREE.Vector3();
+function aim(look, dist, elev = .45, az = 0){
+  lastAim = [look, dist, elev, az];
+  const hf = Math.max(140, H - free.top - free.bot), d = dist * Math.max(H / hf, (W < 760 ? 2.1 : 1.5) * H / W);
+  camGoal.look.set(look[0], look[1], look[2]);
+  camGoal.pos.set(look[0] + d * Math.cos(elev) * Math.sin(az), look[1] + d * Math.sin(elev), look[2] + d * Math.cos(elev) * Math.cos(az));
+}
+function resize(){
+  W = stage.clientWidth || 1; H = stage.clientHeight || 1;
+  const sec = sections[idx], sr = stage.getBoundingClientRect();
+  const txt = sec.querySelector('.txt'), rd = sec.querySelector('.read'), ctl = sec.querySelector('.ctl');
+  let top = sec.dataset.lift === '0' ? 0 : txt.getBoundingClientRect().bottom - sr.top;
+  if (rd && getComputedStyle(rd).position !== 'absolute') top = rd.getBoundingClientRect().bottom - sr.top;
+  free = {top:top + 8, bot:Math.max(70, ctl ? sr.bottom - ctl.getBoundingClientRect().top + 8 : 0)};
+  measure();
+  if (renderer){ renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(W, H, false); }
+  camera.aspect = W / H; camera.setViewOffset(W, H, 0, -(free.top - free.bot) / 2, W, H);
+  if (lastAim) aim(...lastAim);
+}
+/* everything fixed on the slide that a label must not sit on: title, text, panels, controls, navigation */
+let obst = [], mt = 0;
+function measure(){
+  const sr = stage.getBoundingClientRect();
+  obst = [...sections[idx].querySelectorAll('h1,.txt p,.read > *,.ctl > *,.tblwrap,.recap,.by,.foot'), document.querySelector('.nav')].map(e => { const r = e.getBoundingClientRect(); return r.width && r.height ? {l:r.left - sr.left - 6, t:r.top - sr.top - 4, r:r.right - sr.left + 6, b:r.bottom - sr.top + 4} : null; }).filter(Boolean);
+}
+let rotGoal = 0, dragX = null;
+canvas.addEventListener('pointerdown', e => { dragX = e.clientX; });
+addEventListener('pointermove', e => { if (dragX === null) return; rotGoal += (e.clientX - dragX) * .008; dragX = e.clientX; });
+addEventListener('pointerup', () => { dragX = null; });
+addEventListener('pointercancel', () => { dragX = null; });
+canvas.addEventListener('dblclick', () => { rotGoal = 0; });
+function clearWorld(){
+  world.traverse(o => { if (o.geometry && o.geometry !== BOX && o.geometry !== EDGE) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach(m => m.dispose()); });
+  while (world.children.length) world.remove(world.children[0]);
+  tagsEl.innerHTML = ''; tags = [];
+}
+
+/* the two desks on the load and read slides: desk area is drawn to memory size */
+const KA = .045, dims = gb => { const a = gb * KA, w = Math.sqrt(a * 1.5); return [w, a / w]; };
+function desks(){
+  const D = [{gb:512, c:C.cpu, cls:'c', x:-2.6, name:'Server memory, used by the CPU', note:'512 GB · a very big desk, and you can add more', who:'CPU server'}, {gb:128, c:C.gpu, cls:'g', x:4.3, name:'GPU card memory', note:'128 GB · a smaller desk, fixed in size', who:'GPU card'}];
+  D.forEach(s => { [s.w, s.d] = dims(s.gb); box(s.w, .14, s.d, s.c, {roughness:.85}, s.x, .07, 0); });
+  return D;
+}
+
+/* ---------- slides ---------- */
+const BUILD = {
+  intro(){
+    box(8.6, .14, 3.7, C.desk, {roughness:.9}, 0, .07, 0);
+    const b = openBook({w:1.3, d:1.75, K:18}); b.g.position.set(-2.3, .14, 0);
+    box(2.6, .04, .8, C.line, {}, .55, .16, 0);
+    box(1.5, .2, 1.5, C.muted, {roughness:.5}, 2.75, .24, 0);
+    const die = box(.86, .08, .86, C.dim, {emissive:C.hot, emissiveIntensity:0}, 2.75, .38, 0);
+    const sheets = [0, 1, 2].map(() => box(.26, .02, .36, C.hot, {}, 0, .2, 0));
+    tag(anchor(-2.3, 0, 1.95), '<b>Memory</b> holds the book', '', 'down');
+    tag(anchor(2.75, 0, 1.95), '<b>Processor</b> (CPU or GPU) reads the whole book, then writes one word', '', 'down');
+    const out = tag(anchor(2.75, 1.7, 0), '', 'say'); sentence(out, 0);
+    aim([0, .6, .2], 8.4, .6, 0);
+    let n = 0, glow = 0, flow = 0;
+    const nums = fountain(-2.3, .5, 0, 12, .9);
+    return {update(dt, now){
+      flow += dt / 1.5; nums(dt);
+      if (b.step(dt, 1.5)){ n++; sentence(out, n); glow = 1; }
+      glow = Math.max(0, glow - dt * 2.5); die.material.emissiveIntensity = glow * .9; die.material.color.copy(C.board).lerp(C.hot, glow);
+      die.position.y = .38 + Math.sin(Math.PI * glow) * .14;
+      sheets.forEach((m, i) => { const u = (flow * 1.5 + i / 3) % 1; m.position.x = -.65 + u * 2.4; });
+    }};
+  },
+
+  params(){
+    const S = [{x:-4.1, K:8, stack:.05, T:.8, head:'20B parameters · a small model', lab:'<b class="num">20 billion</b> dial settings · about <b class="num">40 GB</b>'},
+               {x:4.1, K:44, stack:.62, T:8, head:'200B parameters · a large model', lab:'<b class="num">200 billion</b> dial settings · about <b class="num">400 GB</b>'}];
+    S.forEach(s => {
+      box(4.4, .14, 3, C.desk, {roughness:.9}, s.x, .07, 0);
+      s.b = openBook({w:1.15, d:1.55, K:s.K, stack:s.stack}); s.b.g.position.set(s.x, .14, 0); s.n = 0;
+      s.out = tag(anchor(s.x, 2.6, 0), '', 'say'); sentence(s.out, 0, s.head);
+      tag(anchor(s.x, 0, 1.65), s.lab, '', 'down');
+    });
+    const NUMS = [.12, -.87, .71, .05, -.33], pg = tag(anchor(0, -.1, 0), '', 'say ctr'); pg.el.style.width = '240px'; let hi = 0, ht = 9;
+    const page = () => { pg.el.innerHTML = '<b class="hd">Five dials from one page</b><span class="dials">' + NUMS.map((v, i) => '<span class="dial' + (i === hi ? ' on' : '') + '"><svg viewBox="-12 -12 24 24" width="32" height="32"><circle r="10"/><line y2="-9" transform="rotate(' + v * 135 + ')"/></svg>' + v.toFixed(2).replace('-', '−') + '</span>').join('') + '</span><span class="cnt">each dial is one parameter</span>'; };
+    aim([0, .9, .3], 11.2, .5, 0);
+    return {update(dt){
+      ht += dt; if (ht > .9){ ht = 0; hi = (hi + 1) % NUMS.length; page(); }
+      S.forEach(s => { if (s.b.step(dt, s.T)){ s.n++; sentence(s.out, s.n, s.head); } });
+    }};
+  },
+
+  sov(){
+    const mode = ST.sov.mode;
+    R('sov-cap', {
+      privacy:'With a rented AI, your questions and documents leave your building. Depending on the provider and the laws it answers to, they may be kept, used to train its model, or read by others. With your own, they never leave.',
+      control:'Someone else can change the book, raise the price or switch it off. Yours keeps working, even with no internet.',
+      cost:'A rented AI bills you for every word. Your own costs the same however much you use it.',
+      origin:'A model is only a book of numbers. It cannot send anything anywhere. Run it in your own building, cut off from the outside, and nothing goes back to its maker, whichever country it came from.'
+    }[mode]);
+    R('sov-note', mode === 'origin' ? 'For example, an open model from a Chinese lab, run this way, cannot send your data to China. Its answers still need testing, like any model’s.' : '');
+    resize();
+    const wall = (x, z, w, d, c) => {
+      box(w, .06, d, C.surface, {roughness:.9}, x, .03, z);
+      [[0, -d / 2, w, .1], [0, d / 2, w, .1], [-w / 2, 0, .1, d], [w / 2, 0, .1, d]].forEach(([dx, dz, ww, dd]) => box(ww, .46, dd, c, {roughness:.8}, x + dx, .23, z + dz));
+    };
+    const bz = -2.6, uz = 1.6;
+    const S = [{x:-3.7, own:0}, {x:3.7, own:1}];
+    S.forEach(s => {
+      if (s.own) wall(s.x, -.55, 3.9, 6.4, C.cpu);
+      else { wall(s.x, 1.5, 3.9, 2.3, C.cpu); wall(s.x, bz, 3.9, 2.3, C.muted); s.cable = box(.1, .06, 1.8, C.muted, {}, s.x, .06, -.55); }
+      s.b = openBook({w:.8, d:1.05, K:10}); s.b.g.position.set(s.x, .06, bz);
+      s.ux = [-1.15, 0, 1.15].map(dx => { box(.8, .08, .55, C.board, {}, s.x + dx, .1, uz); return s.x + dx; });
+      s.docs = Array.from({length:5}, () => ({m:box(.44, .03, .58, PAPER, {}, 0, 0, 0), f:2, back:false, ux:0}));
+      s.docs.forEach(d => d.m.visible = false); s.timer = s.own ? .4 : 0; s.k = 0;
+      if (mode === 'origin' && s.own){
+        /* the maker's building, the one-off download, and the link that is then removed */
+        wall(s.x, -6.1, 3, 1.6, C.muted);
+        s.link = box(.1, .06, 1.5, C.muted, {}, s.x, .06, -4.5);
+        s.stubs = [box(.1, .06, .35, C.warn, {}, s.x, .06, -5.1), box(.1, .06, .35, C.warn, {}, s.x, .06, -3.95)]; s.stubs.forEach(m => m.visible = false);
+        s.parcel = closedBook(.7, .18, .5); s.got = -.6;
+        tag(anchor(s.x, .9, -7.1), 'the model’s maker, in any country', 'soft');
+        s.cut = tag(anchor(s.x + .3, .3, -4.5), 'link removed after the download', 'c', 'right'); s.cut.off = true;
+      }
+      if ((mode === 'privacy' || mode === 'origin') && !s.own){
+        s.kept = Array.from({length:14}, (_, i) => { const m = box(.44, .03, .58, C.warn, {}, s.x + 1.3, .1 + i * .035, bz); m.visible = false; return m; }); s.nk = 0;
+        tag(anchor(s.x, .9, bz - 1.4), mode === 'origin' ? 'the maker’s building, in any country: <b>your data is now there</b>' : 'copies kept here: they may <b>train their model</b> or be <b>read by others</b>', 'warn');
+      } s.up = true; s.clock = 0; s.paid = 0;
+      tag(anchor(s.x, 0, 3.1), mode === 'origin' ? (s.own ? '<b>Their book, in your building</b><br>downloaded once, then cut off' : '<b>Using the maker’s own service</b><br>the book stays with its maker') : s.own ? '<b>Your own AI</b><br>the book is in your building' : '<b>Rented AI</b><br>the book is in someone else’s building', (s.own ? 'c' : '') + ' ctr', 'down');
+      s.st = tag(anchor(s.x + (s.own ? 2.15 : -2.15), .4, -.55), '', s.own ? 'c' : 'warn', s.own ? 'right' : 'left');
+      if (mode === 'cost'){
+        const cx = s.x + (s.own ? 2.9 : -2.9);
+        s.coins = Array.from({length:34}, (_, i) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(.26, .26, .07, 24), Mt(C.hot, {metalness:.5, roughness:.35})); m.position.set(cx, .05 + i * .08, uz); m.visible = s.own ? i < 10 : false; world.add(m); return m; });
+        s.ct = tag(anchor(cx, 0, uz + .5), '', 'num ctr', 'down');
+      }
+    });
+    const [A, B] = S, DOWN = ['They changed the book', 'They switched it off', 'The line is down'];
+    if (mode === 'privacy'){ A.st.el.innerHTML = 'your documents are <b>outside</b> your walls'; B.st.el.innerHTML = 'everything <b>stays inside</b> your walls'; }
+    if (mode === 'control') B.st.el.innerHTML = '<b>Still working.</b> Your book, your rules';
+    if (mode === 'cost'){ A.st.el.innerHTML = 'you pay for <b>every word</b>'; B.st.el.innerHTML = '<b>Same cost</b>, however much you use it'; B.ct.el.innerHTML = 'fixed cost<br><b>10</b>'; }
+    if (mode === 'origin'){ A.st.el.innerHTML = 'your documents go to the maker, <b>wherever it is</b>'; B.st.el.innerHTML = '<b>Nothing goes back.</b> A book cannot send anything out'; }
+    if (mode === 'origin') aim([0, .2, -1.2], 16.6, .78, 0); else aim([0, .2, -.2], 12.6, .78, 0);
+    let downs = 0;
+    return {
+      on(){ rebuild(); },
+      update(dt){
+        S.forEach(s => {
+          if (mode === 'control' && !s.own){
+            s.clock += dt;
+            if (s.up && s.clock > 4.2){ s.up = false; s.clock = 0; s.st.el.innerHTML = '<b>' + DOWN[downs++ % 3] + '.</b> You wait'; s.docs.forEach(d => { d.f = 2; d.m.visible = false; }); }
+            if (!s.up && s.clock > 3){ s.up = true; s.clock = 0; }
+            if (s.up) s.st.el.innerHTML = 'working, for now';
+            s.st.el.className = 'tag ' + (s.up ? 'soft' : 'warn');
+            s.cable.material.color.copy(s.up ? C.muted : C.warn); s.b.cover.material.color.copy(s.up ? C.cover : C.muted);
+          }
+          if (s.parcel){
+            s.got += dt / 2.2; const e = Math.min(1, Math.max(0, s.got)), q = e * e * (3 - 2 * e);
+            s.parcel.position.set(s.x - .35, .2 + Math.sin(Math.PI * q) * 1.3, -6.1 + (bz + 6.1) * q); s.parcel.visible = e < 1;
+            if (e >= 1){ s.link.visible = false; s.stubs.forEach(m => m.visible = true); s.cut.off = false; }
+          }
+          if (!s.up) return;
+          s.b.step(dt, .6); s.timer += dt;
+          if (s.timer > 1){ s.timer = 0; const d = s.docs.find(d => d.f >= 2); if (d){ d.f = 0; d.back = false; d.ux = s.ux[s.k++ % 3]; d.m.visible = true; } }
+          s.docs.forEach(d => {
+            if (d.f >= 2) return;
+            d.f += dt / 1.3; const f = Math.min(1, d.f), g = d.back ? 1 - f : f, z = uz + (bz - uz) * g;
+            d.m.position.set(d.ux + (s.x - d.ux) * g, .55 + Math.sin(Math.PI * g) * .5, z);
+            const outside = !s.own && z < .35 && z > -1.45;
+            d.m.material.color.copy(d.back ? C.hot : outside ? C.warn : PAPER);
+            if (d.f >= 1){
+              if (!d.back){ d.back = true; d.f = 0; if (s.kept && s.nk < s.kept.length) s.kept[s.nk++].visible = true; }
+              else { d.f = 2; d.m.visible = false; if (mode === 'cost' && !s.own){ s.paid++; s.coins.forEach((m, i) => m.visible = i < s.paid); } }
+            }
+          });
+          if (mode === 'cost' && !s.own) s.ct.el.innerHTML = 'bill so far<br><b>' + s.paid + '</b> and rising';
+        });
+      }
+    };
+  },
+
+  ctx(){
+    /* three notepads of different capacity, and one job dropped onto each: the stack either fits or sticks out of the top */
+    const JOBS = {quick:[500, 'a quick question and its answer', 'under 1 page'], report:[20000, 'a 25-page report, the question and the summary', 'about 30 pages'],
+                  contracts:[200000, '300 pages of contracts', 'about 300 pages'], code:[800000, 'a whole codebase', 'about 1,200 pages']};
+    const [need, jname, jpages] = JOBS[ST.ctx.job], HC = 2.1, tw = 2.3, td = 1.6;
+    const WIN = [{cap:8000, name:'8K window', sub:'about 12 pages', x:-3.7}, {cap:128000, name:'128K window', sub:'about 200 pages', x:0}, {cap:1000000, name:'1M window', sub:'about 1,500 pages', x:3.7}];
+    WIN.forEach(w => {
+      box(tw + .3, .1, td + .3, C.board, {roughness:.9}, w.x, .05, 0);
+      [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => box(.06, HC, .06, C.muted, {}, w.x + sx * tw / 2, .1 + HC / 2, sz * td / 2));
+      [-1, 1].forEach(sg => { box(tw + .06, .05, .06, C.muted, {}, w.x, .1 + HC, sg * td / 2); box(.06, .05, td, C.muted, {}, w.x + sg * tw / 2, .1 + HC, 0); });
+      w.fill = Math.min(1, need / w.cap); w.fits = need <= w.cap;
+      w.stack = box(tw - .3, 1, td - .3, C.hot, {roughness:.9}, w.x, .1, 0);
+      w.over = w.fits ? [] : Array.from({length:6}, (_, i) => { const m = box(tw - .5, .05, td - .5, C.warn, {}, w.x + (rnd() - .5) * .5, .1 + HC + .06 + i * .075, (rnd() - .5) * .3); m.rotation.y = (rnd() - .5) * .9; m.visible = false; return m; });
+      const r = need / w.cap;
+      w.st = tag(anchor(w.x, .1 + HC + (w.fits ? .3 : .85), 0), w.fits ? '<b>Fits ✓</b><span class="cnt">' + (w.fill < .01 ? 'under 1%' : Math.round(w.fill * 100) + '%') + ' full</span>' : '<b>Does not fit ✗</b><span class="cnt">' + (r < 10 ? r.toFixed(1) : Math.round(r)) + ' times too big</span>', (w.fits ? 'c' : 'warn') + ' ctr'); w.st.off = true;
+      tag(anchor(w.x, 0, td / 2 + .3), '<b>' + w.name + '</b><span class="cnt">' + w.sub + '</span>', 'ctr', 'down');
+    });
+    tag(anchor(0, .1 + HC + 1.75, 0), '<b>The job:</b> ' + jname + '<span class="cnt">about ' + need.toLocaleString('en-GB') + ' tokens · ' + jpages + '</span>', 'ctr');
+    aim([0, 1.35, .3], 10.2, .3, 0);
+    let t = -.3;
+    return {
+      on(){ rebuild(); },
+      update(dt){
+        t += dt / 1.3; const e = Math.min(1, Math.max(0, t)), q = e * e * (3 - 2 * e);
+        WIN.forEach(w => {
+          const h = Math.max(.02, w.fill * HC * q); w.stack.scale.y = h; w.stack.position.y = .1 + h / 2;
+          if (e >= 1){ w.st.off = false; w.over.forEach(m => m.visible = true); }
+        });
+      }
+    };
+  },
+
+  load(){
+    const gb = +ST.load.size, D = desks(), [bw, bd] = dims(gb), zS = -4.7;
+    /* working room for conversations: about a fifth on top of the file, a rule of thumb */
+    const work = Math.round(gb * .2), need = gb + work, pw = bw * .2, off = (pw + .08) / 2;
+    D.forEach(s => {
+      box(bw + pw + .5, .12, bd + .3, C.board, {roughness:.9}, s.x, .06, zS);
+      s.book = closedBook(bw, .34, bd);
+      s.pad = box(pw, .1, bd, PAPER, {roughness:.95}, bw / 2 + pw / 2 + .08, .05, 0, s.book);
+      s.fits = need <= s.gb;
+      tag(anchor(s.x, 0, s.d / 2 + .25), '<b>' + s.name + '</b><span class="cnt">' + s.note + '</span>', s.cls + ' ctr', 'down');
+      s.status = tag(anchor(s.x, 1.25, 0), (s.fits ? '<b>Fits ✓</b>' : '<b>Does not fit ✗</b>') + '<span class="cnt">needs ' + need + ' GB · desk has ' + s.gb + ' GB</span>', (s.fits ? s.cls : 'warn') + ' ctr');
+      s.status.off = true;
+    });
+    tag(anchor(.85, .3, zS - bd / 2 - .3), 'the shelf (disk): where the book is kept until it is needed', 'soft');
+    tag(anchor(bw / 2 + pw / 2 + .08, 0, bd / 2 + .1, D[0].book), 'notepad: room to work', '', 'down');
+    aim([.9, .2, -1.5], 14, .74, 0);
+    let t = -.5;
+    return {
+      on(){ rebuild(); },
+      update(dt, now){
+        t += dt / 1.9; const e = Math.min(1, Math.max(0, t)), q = e * e * (3 - 2 * e);
+        D.forEach(s => {
+          s.book.position.set(s.x - off, .12 + .02 * q + Math.sin(Math.PI * q) * 1.5, zS * (1 - q));
+          if (e >= 1){
+            s.status.off = false;
+            if (!s.fits){ s.book.userData.cov.forEach(m => m.material.color.lerp(C.warn, .12)); s.book.rotation.y = Math.sin(now * 9) * .02; }
+          }
+        });
+      }
+    };
+  },
+
+  read(){
+    const D = desks(); D[0].T = 3; D[1].T = .15;
+    D[0].lab = '<b>Turns a few pages at a time</b><span class="cnt">about 200 GB a second</span>'; D[1].lab = '<b>Turns many pages at once</b><span class="cnt">about 4,000 GB a second</span>';
+    D.forEach(s => {
+      s.b = openBook(); s.b.g.position.set(s.x, .14, 0); s.n = 0;
+      /* readers: how many pages are read at once, drawn to the 20x ratio */
+      s.cols = s.cls === 'g' ? 20 : 5; s.rows = s.cls === 'g' ? 5 : 1;
+      s.rd = new THREE.InstancedMesh(new THREE.SphereGeometry(.06, 12, 10), Mt(C.hot, {emissive:C.hot, emissiveIntensity:.9}), s.cols * s.rows); world.add(s.rd);
+      s.out = tag(anchor(s.x, 2.1, 0), '', 'say ' + s.cls); sentence(s.out, 0, s.who);
+      tag(anchor(s.x, 0, s.d / 2 + .25), s.lab, s.cls + ' ctr', 'down');
+    });
+    aim([.9, .5, .2], 10.8, .62, 0);
+    const d = new THREE.Object3D();
+    return {update(dt, now){ D.forEach(s => {
+      if (s.b.step(dt, s.T)){ s.n++; sentence(s.out, s.n, s.who); }
+      for (let i = 0; i < s.cols * s.rows; i++){
+        const c = i % s.cols, r = Math.floor(i / s.cols);
+        const z = s.rows > 1 ? ((r + .5) / s.rows - .5) * 1.15 : Math.sin(now * 1.1) * .5;
+        d.position.set(s.x + ((c + .5) / s.cols - .5) * 1.9, 1.22 + Math.sin(now * 5 + i * 1.7) * .04, z); d.updateMatrix(); s.rd.setMatrixAt(i, d.matrix);
+      }
+      s.rd.instanceMatrix.needsUpdate = true;
+    }); }};
+  },
+
+  chip(){
+    box(8, .14, 3.4, C.desk, {roughness:.9}, 0, .07, 0);
+    const b = openBook({w:1.15, d:1.55}); b.g.position.set(-2.2, .14, 0);
+    box(2, .04, .8, C.line, {}, .25, .16, 0);
+    box(1.5, .2, 1.5, C.muted, {roughness:.5}, 2.4, .24, 0);
+    const die = box(.86, .08, .86, C.dim, {emissive:C.hot, emissiveIntensity:0}, 2.4, .38, 0);
+    const sheets = [0, 1, 2].map(() => box(.26, .02, .36, C.hot, {}, 0, .2, 0));
+    tag(anchor(-2.2, 0, 1.75), '<b>Memory</b> turns the pages', 'g', 'down');
+    const ct = tag(anchor(2.4, 0, 1.75), '', '', 'down');
+    const out = tag(anchor(2.4, 1.6, 0), '', 'say'); sentence(out, 0);
+    aim([0, .5, .2], 7.8, .6, 0);
+    let Tm, Tc, phase = 'mem', pt = 0, n = 0, glow = 0, flow = 0;
+    function set(){
+      Tm = .9 / (ST.chip.mem ? 2 : 1); Tc = .1 / (ST.chip.chip ? 2 : 1);
+      R('r-chip-rate', (1 / (Tm + Tc)).toFixed(2)); R('r-chip-m', Tm.toFixed(2) + ' s'); R('r-chip-c', Tc.toFixed(2) + ' s');
+      $('#tb-m').style.width = Tm * 100 + '%'; $('#tb-c').style.width = Tc * 100 + '%';
+      const c = ST.chip.chip, m = ST.chip.mem;
+      R('r-chip-why', c && m ? 'Both twice as fast: twice the words.' : c ? 'A processor twice as fast: only 5% more words. It still has to wait for the pages.' : m ? 'Memory twice as fast: 82% more words.' : 'The processor waits for pages 90% of the time.');
+    }
+    set();
+    return {
+      on(){ set(); },
+      update(dt){
+        if (phase === 'mem'){
+          flow += dt / Tm;
+          if (b.step(dt, Tm)){ phase = 'chip'; pt = 0; }
+          ct.el.innerHTML = '<b>Processor</b> is waiting for pages…';
+        } else {
+          pt += dt; glow = 1; ct.el.innerHTML = '<b>Processor</b> is reading';
+          if (pt >= Tc){ phase = 'mem'; n++; sentence(out, n); }
+        }
+        glow = Math.max(0, glow - dt * 5); die.material.emissiveIntensity = glow * .9; die.material.color.copy(C.board).lerp(C.hot, glow);
+        die.position.y = .38 + glow * .1;
+        sheets.forEach((m, i) => { const u = (flow * 1.5 + i / 3) % 1; m.position.x = -.65 + u * 1.8; m.visible = phase === 'mem'; });
+      }
+    };
+  },
+
+  chap(){
+    /* a reading race: both runners must write the same 14 words; a runner may step forward only after reading its chapters */
+    const L = 9.6, x0 = -L / 2, N = 14, gx = k => x0 + k * L / N, d = new THREE.Object3D();
+    const lanes = [{z:-.5, name:'Dense', sub:'all 128 chapters, every word', col:C.uni},
+                   {z:2.15, name:'Sparse', sub:'4 chapters per word, picked by its index', col:C.pink}];
+    lanes.forEach(l => {
+      box(L + 1.5, .08, 1, C.board, {}, .1, .04, l.z);
+      for (let k = 0; k <= N; k++) box(.035, .02, 1, k === N ? C.ink : C.line, {}, gx(k), .09, l.z);
+      for (let r = 0; r < 5; r++) for (let c = 0; c < 2; c++) box(.2, .02, .2, (r + c) % 2 ? C.ink : C.bg, {}, gx(N) + .13 + c * .2, .09, l.z - .4 + r * .2);
+      l.sz = l.z - 1; box(L + .2, .06, .44, C.board, {}, 0, .03, l.sz);
+      l.im = new THREE.InstancedMesh(new THREE.BoxGeometry(.052, .5, .3), Mt(0xffffff), 128); world.add(l.im);
+      l.lit = new Float32Array(128); l.pop = new Float32Array(128); l.goal = new Float32Array(128);
+      l.base = Array.from({length:128}, () => C.dim.clone().lerp(C.muted, .15 + rnd() * .5));
+      l.cx = i => x0 + (i + .5) * L / 128;
+      l.body = box(.56, .3, .56, l.col, {emissive:l.col, emissiveIntensity:.25}, gx(0), .23, l.z);
+      l.cnt = tag(anchor(0, 2.7, 0, l.body), '', 'num');
+      tag(anchor(x0 - 1.35, .3, l.z), '<b>' + l.name + '</b><span class="cnt">' + l.sub + '</span>', '', 'left');
+    });
+    const [A, B] = lanes;
+    const head = anchor(0, .95, A.sz), ht = tag(head, '', 'soft');
+    const idx = box(.5, .34, .34, C.gpu, {emissive:C.hot, emissiveIntensity:0}, x0 - .5, .2, B.sz);
+    tag(anchor(gx(N) + .23, 0, B.z + .6), '<b>Finish:</b> 14 words', '', 'down');
+    const win = tag(anchor(0, 2.3, A.sz), '<b class="hd">Sparse wins</b>14 words written while dense wrote 1<span class="cnt">about 14 times less reading per word</span>', 'say ctr'); win.el.style.width = '340px'; win.off = true;
+    aim([-.5, .4, .55], 10.6, .62, 0);
+    const paint = (l, dt) => {
+      const k = 1 - Math.exp(-dt * 16);
+      for (let i = 0; i < 128; i++){
+        l.pop[i] += (l.goal[i] - l.pop[i]) * k;
+        d.position.set(l.cx(i), .31 + l.pop[i] * .3, l.sz); d.updateMatrix(); l.im.setMatrixAt(i, d.matrix);
+        tc.copy(l.base[i]).lerp(C.hot, Math.min(1, l.lit[i])); l.im.setColorAt(i, tc);
+      }
+      l.im.instanceMatrix.needsUpdate = true; l.im.instanceColor.needsUpdate = true;
+    };
+    const say = l => { l.cnt.el.innerHTML = '<b>' + l.k + '</b> ' + (l.k === 1 ? 'word' : 'words'); };
+    const adv = l => { l.k++; l.step = 0; say(l); burstAt(l.body, 7, .3); };
+    let ph, cy, pick, said, ig, over, hold;
+    function reset(){
+      ph = 0; cy = 1; pick = []; said = true; ig = 0; over = false; hold = 0; win.off = true;
+      lanes.forEach(l => { l.k = 0; l.step = 1; l.lit.fill(0); l.goal.fill(0); say(l); });
+    }
+    reset(); lanes.forEach(l => paint(l, 1));
+    return {update(dt, now){
+      if (!over){
+        /* dense: one chapter after another, all 128, for a single word */
+        ph += dt / 9.8; const c = Math.min(127, Math.floor(ph * 128));
+        for (let i = 0; i < 128; i++){ if (i <= c) A.lit[i] = 1; A.goal[i] = i === c ? 1 : 0; }
+        head.position.x = A.cx(c); ht.el.innerHTML = 'reading chapter <b class="num">' + (c + 1) + '</b> of 128';
+        if (ph >= 1){ adv(A); ph = 0; A.lit.fill(0); if (B.k >= N){ over = true; win.off = false; burstAt(B.body, 90, .6); } }
+        /* sparse: ask the index, read 4 chapters, step */
+        if (B.k < N){
+          cy += dt / .7;
+          if (cy >= 1){ cy -= 1; said = false; ig = 1; const q = new Set(); while (q.size < 4) q.add(Math.floor(Math.random() * 128)); pick = [...q]; }
+          for (let i = 0; i < 128; i++){ B.lit[i] = Math.max(0, B.lit[i] - dt * 5); B.goal[i] = 0; }
+          if (cy < .7) pick.forEach(i => { B.lit[i] = 1; B.goal[i] = 1; });
+          if (cy >= .7 && !said){ said = true; adv(B); }
+        } else for (let i = 0; i < 128; i++){ B.lit[i] = Math.max(0, B.lit[i] - dt * 5); B.goal[i] = 0; }
+      } else { hold += dt; A.goal.fill(0); if (hold > 4.5) reset(); }
+      ig = Math.max(0, ig - dt * 3.5); idx.material.emissiveIntensity = ig;
+      lanes.forEach((l, li) => {
+        l.step = Math.min(1, l.step + dt / .22); const e = l.step * l.step * (3 - 2 * l.step);
+        const x = l.k ? gx(l.k - 1) + (gx(l.k) - gx(l.k - 1)) * e : gx(0), done = l.k >= N;
+        const y = Math.sin(Math.PI * e) * .5 + (done ? Math.abs(Math.sin(now * 8)) * .35 : !over && li === 0 ? Math.abs(Math.sin(now * 10)) * .05 : 0);
+        l.body.position.set(x, .23 + y, l.z);
+        paint(l, dt);
+      });
+    }};
+  },
+
+  reason(){
+    const TH = 'ball = x. bat = x + £1. so 2x + £1 = £1.10, x = 5p.'.split(' ');
+    const S = [{x:-4, head:'No reasoning: answers straight away', th:[], ans:['The', 'ball', 'costs', '10p.'], ok:false},
+               {x:4, head:'Reasoning: works it out first', th:TH, ans:['The', 'ball', 'costs', '5p.'], ok:true}];
+    const q = tag(anchor(0, 0, 2.3), '<b class="hd">The question</b>A bat and a ball cost £1.10. The bat costs £1 more than the ball. How much is the ball?<span class="cnt">an illustration of the difference</span>', 'say ctr', 'down'); q.el.style.width = '430px';
+    S.forEach(s => {
+      box(4.6, .14, 3, C.desk, {roughness:.9}, s.x, .07, 0);
+      s.b = openBook({w:1.05, d:1.45}); s.b.g.position.set(s.x - .55, .14, 0);
+      s.sheets = s.th.map((w, i) => { const m = box(.72, .03, .95, C.hot, {}, s.x + 1.45, .16 + i * .035, 0); m.visible = false; return m; });
+      if (s.th.length) tag(anchor(s.x + 1.45, 0, 1.6), 'scratch paper: one sheet per thinking word', 'soft', 'down');
+      s.out = tag(anchor(s.x, 2.4, 0), '', 'say'); s.out.el.style.width = '300px';
+      s.draw = () => {
+        const k = Math.min(s.n, s.th.length), a = Math.max(0, s.n - s.th.length), done = a >= s.ans.length;
+        s.out.el.innerHTML = '<b class="hd">' + s.head + '</b>'
+          + (s.th.length ? '<span class="think">' + (k ? 'thinking: ' + s.th.slice(0, k).join(' ') : 'thinking…') + '</span>' : '')
+          + '<span class="w" style="min-height:1.3em">' + (a ? s.ans.slice(0, a).map((w, i) => i === a - 1 && !done ? '<em>' + w + '</em>' : w).join(' ') : '…') + '</span>'
+          + (done ? '<span class="vd ' + (s.ok ? 'ok">Right ✓' : 'no">Wrong ✗') + '</span>' : '')
+          + '<span class="cnt">' + (s.th.length ? k + ' thinking + ' + a + ' answer = ' + s.n : s.n) + ' reads of the book</span>';
+      };
+    });
+    aim([0, .9, .3], 11.6, .5, 0);
+    let hold = 0;
+    const reset = () => { hold = 0; S.forEach(s => { s.n = 0; s.sheets.forEach(m => m.visible = false); s.draw(); }); };
+    reset();
+    return {update(dt){
+      let all = true;
+      S.forEach(s => {
+        if (s.n >= s.th.length + s.ans.length) return;
+        all = false;
+        if (s.b.step(dt, .45)){ s.n++; if (s.n <= s.th.length) s.sheets[s.n - 1].visible = true; s.draw(); if (s.ok && s.n === s.th.length + s.ans.length) burstAt(s.out.anc, 60, -.6); }
+      });
+      if (all){ hold += dt; if (hold > 4.5) reset(); }
+    }};
+  },
+
+  bits(){
+    /* three dials set to the same value: fewer bits = fewer clicks = a rounder setting and a thinner book */
+    const cols = [{n:16, gb:235, x:-4.7, nick:'a smooth dial'}, {n:8, gb:117, x:0, nick:'256 clicks'}, {n:4, gb:61, x:4.7, nick:'only 16 clicks'}];
+    const R = 1.3, cy = 3.5, d = new THREE.Object3D(), ang = v => (v - .5) * Math.PI * 1.5, ink = () => new THREE.MeshBasicMaterial({color:C.ink});
+    cols.forEach(c => {
+      const g = new THREE.Group(); g.position.set(c.x, cy, 0); world.add(g);
+      const face = new THREE.Mesh(new THREE.CylinderGeometry(R + .16, R + .16, .1, 64), Mt(C.surface)); face.rotation.x = Math.PI / 2; g.add(face);
+      g.add(new THREE.Mesh(new THREE.TorusGeometry(R + .16, .05, 10, 64), Mt(C.board)));
+      if (c.n === 16){ const ring = new THREE.Mesh(new THREE.RingGeometry(R - .16, R, 96, 1, -Math.PI / 4, Math.PI * 1.5), ink()); ring.position.z = .06; g.add(ring); }
+      else {
+        const N = 2 ** c.n, w = c.n === 8 ? .012 : .07, h = c.n === 8 ? .16 : .3, im = new THREE.InstancedMesh(new THREE.BoxGeometry(w, h, .02), ink(), N);
+        for (let i = 0; i < N; i++){ const a = ang(i / (N - 1)); d.position.set(Math.sin(a) * (R - h / 2), Math.cos(a) * (R - h / 2), .06); d.rotation.set(0, 0, -a); d.updateMatrix(); im.setMatrixAt(i, d.matrix); }
+        g.add(im);
+      }
+      c.want = new THREE.Group(); c.want.position.z = .1; g.add(c.want); box(.045, R * .95, .02, C.hot, {emissive:C.hot, emissiveIntensity:.7}, 0, R * .475, 0, c.want);
+      c.ptr = new THREE.Group(); c.ptr.position.z = .14; g.add(c.ptr); box(.1, R * .7, .04, C.ink, {}, 0, R * .35, 0, c.ptr);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(.17, .17, .1, 24), Mt(C.ink)); hub.rotation.x = Math.PI / 2; hub.position.z = .18; g.add(hub);
+      c.t = tag(anchor(c.x, cy + R + .4, 0), '', 'ctr'); c.txt = ''; c.a = 0;
+      closedBook(2.2, c.gb / 235 * 1.3, 1.5).position.set(c.x, .1, 0);
+      tag(anchor(c.x, 0, .9), 'the book: <b class="num">' + c.gb + ' GB</b>', '', 'down');
+    });
+    tag(anchor(0, -.75, .9), 'amber needle: the setting we want · dark needle: the nearest one this dial can hold', 'soft', 'down');
+    tag(anchor(0, 1.2, 0), '<b>One model, 117 billion dials, saved three ways.</b><span class="cnt">same model, same parameters: only the precision changes</span>', 'ctr');
+    aim([0, 2.75, 0], 10.8, .05, 0);
+    const WANT = [.7071, .3183, .1416, .9]; let wi = 0, w = .5, timer = 0;
+    return {update(dt){
+      timer += dt; if (timer > 3.4){ timer = 0; wi = (wi + 1) % WANT.length; }
+      w += (WANT[wi] - w) * (1 - Math.exp(-dt * 1.5));
+      cols.forEach(c => {
+        const max = 2 ** c.n - 1, q = Math.round(w * max) / max;
+        c.want.rotation.z = -ang(w); c.a += (ang(q) - c.a) * (1 - Math.exp(-dt * 22)); c.ptr.rotation.z = -c.a;
+        const txt = '<b>' + c.n + ' bits</b> · ' + c.nick + '<span class="cnt">wants ' + w.toFixed(3) + '<br>holds ' + q.toFixed(c.n === 4 ? 2 : 3) + '</span>';
+        if (txt !== c.txt){ c.txt = txt; c.t.el.innerHTML = txt; }
+      });
+    }};
+  },
+
+  unified(){
+    const k = .78, dm = gb => dims(gb).map(v => v * k), chipAt = (x, z, c) => { box(.62, .12, .62, C.muted, {roughness:.5}, x, .2, z); box(.36, .06, .36, c, {emissive:c, emissiveIntensity:.3}, x, .29, z); };
+    const [w1, d1] = dm(512), [w2, d2] = dm(128), [w3, d3] = dm(256), x1 = -4.3, x2 = -.1, x3 = 4.4;
+    box(w1, .14, d1, C.cpu, {roughness:.85}, x1, .07, 0); chipAt(x1, 0, C.cpu); tag(anchor(x1, .5, 0), 'CPU', 'soft');
+    box(w2, .14, d2, C.gpu, {roughness:.85}, x2, .07, 0); chipAt(x2 + .78, 0, C.hot); tag(anchor(x2 + .78, .5, 0), 'GPU', 'soft');
+    box(w3, .14, d3, C.uni, {roughness:.85}, x3, .07, 0); chipAt(x3 - 1.22, 0, C.cpu); chipAt(x3 + 1.22, 0, C.hot);
+    tag(anchor(x3 - 1.22, .5, 0), 'CPU', 'soft'); tag(anchor(x3 + 1.22, .5, 0), 'GPU', 'soft');
+    const S = [{x:x2 - .32, T:.15, head:'Separate: the GPU card’s own desk', cls:'g', ax:x2}, {x:x3, T:.75, head:'Unified: one shared desk', cls:'u', ax:x3}];
+    S.forEach(s => { s.b = openBook({w:.62, d:.85, K:10}); s.b.g.position.set(s.x, .14, 0); s.n = 0; s.out = tag(anchor(s.ax, 1.9, 0), '', 'say ' + s.cls); s.out.el.style.width = '195px'; sentence(s.out, 0, s.head); });
+    tag(anchor(x1, 0, d1 / 2 + .2), '<b>CPU server memory</b><span class="cnt">512 GB · CPU only</span>', 'c ctr', 'down');
+    tag(anchor(x2, 0, d2 / 2 + .2), '<b>GPU card memory</b><span class="cnt">128 GB · GPU only</span>', 'g ctr', 'down');
+    tag(anchor(x3, 0, d3 / 2 + .2), '<b>One shared desk</b><span class="cnt">256 GB · CPU and GPU</span>', 'u ctr', 'down');
+    aim([0, .5, .2], 10.2, .64, 0);
+    return {update(dt){ S.forEach(s => { if (s.b.step(dt, s.T)){ s.n++; sentence(s.out, s.n, s.head); } }); }};
+  },
+
+  split(){
+    const n = +ST.split.n, span = 9.6, cw = 1.7, cd = 1.25, step = span / n;
+    const xs = Array.from({length:n}, (_, i) => -span / 2 + (i + .5) * step), L = -span / 2 - .9, Rt = span / 2 + .9;
+    const rows = [{z:-1.7, fast:1, name:'Fast link, such as InfiniBand', sub:'quick hand-over', cls:'c'}, {z:1.8, fast:0, name:'Slow link, such as an ordinary network', sub:'slow hand-over', cls:'warn'}];
+    rows.forEach(r => {
+      r.seg = [{a:L, b:xs[0] - cw / 2, T:.12}];
+      xs.forEach((x, i) => {
+        box(cw, .12, cd, C.gpu, {roughness:.85}, x, .06, r.z);
+        closedBook(1.15, .3, .85).position.set(x, .12, r.z);
+        r.seg.push({a:x - cw / 2, b:x + cw / 2, T:.8 / n});
+        if (i < n - 1){
+          const rad = r.fast ? .14 : .04, len = step - cw;
+          const m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, len, 20), Mt(r.fast ? C.cpu : C.warn, {transparent:true, opacity:.5}));
+          m.rotation.z = Math.PI / 2; m.position.set(x + step / 2, .3, r.z); world.add(m);
+          r.seg.push({a:x + cw / 2, b:xs[i + 1] - cw / 2, T:r.fast ? .06 : .9, link:1});
+        }
+      });
+      r.seg.push({a:xs[n - 1] + cw / 2, b:Rt, T:.12});
+      r.tot = r.seg.reduce((a, s) => a + s.T, 0); r.i = 0; r.t = 0; r.n = 0;
+      r.ball = new THREE.Mesh(new THREE.SphereGeometry(.16, 20, 14), Mt(C.hot, {emissive:C.hot, emissiveIntensity:.8})); world.add(r.ball);
+      tag(anchor(L - .55, .3, r.z), '<b>' + r.name + '</b><span class="cnt">' + r.sub + '</span>', r.cls, 'left');
+      r.out = tag(anchor(Rt + .15, .3, r.z), '', 'num', 'right');
+      r.say = () => { r.out.el.innerHTML = '<b>' + r.n + '</b> ' + (r.n === 1 ? 'word' : 'words') + ' written'; };
+      r.say();
+    });
+    tag(anchor(0, .7, -3.1), 'one book, cut into ' + n + ' parts, one part on each card', 'soft');
+    xs.forEach((x, i) => tag(anchor(x, 0, rows[1].z + .75), 'part ' + (i + 1), 'soft', 'down'));
+    tag(rows[0].ball, 'the word being written', 'soft');
+    R('r-split-x', (rows[1].tot / rows[0].tot).toFixed(1) + '×');
+    R('r-split-why', n === 2 ? 'one slow hand-over for every word' : 'three slow hand-overs for every word: more cards, more waiting');
+    aim([0, 0, .3], 12.8, .8, 0);
+    return {
+      on(){ rebuild(); },
+      update(dt){ rows.forEach(r => {
+        r.t += dt; let s = r.seg[r.i];
+        while (r.t >= s.T){ r.t -= s.T; r.i++; if (r.i >= r.seg.length){ r.i = 0; r.n++; r.say(); burstAt(r.ball, 14, 0); } s = r.seg[r.i]; }
+        const f = r.t / s.T, dip = s.link ? 1 - (2 * f - 1) ** 2 : 0;
+        r.ball.position.set(s.a + (s.b - s.a) * f, .66 - dip * .36, r.z);
+        r.ball.scale.setScalar(s.link && !r.fast ? 1 - dip * .7 : 1);
+      }); }
+    };
+  },
+
+  share(){
+    const n = +ST.share.n, bx = -5.6;
+    box(3, .14, 2.3, C.gpu, {roughness:.85}, bx, .07, 0);
+    const b = openBook({w:.95, d:1.3}); b.g.position.set(bx, .14, 0);
+    tag(anchor(bx, 0, 1.4), 'One model: <b class="num">200</b> words a minute in total', 'g', 'down');
+    const cols = Math.ceil(Math.sqrt(n * 1.5)), rws = Math.ceil(n / cols), cell = Math.min(8.4 / cols, 5.4 / rws), pw = cell * .86, pd = cell * .62;
+    const U = [];
+    for (let i = 0; i < n; i++){
+      const x = 2 + ((i % cols) - (cols - 1) / 2) * cell, z = (Math.floor(i / cols) - (rws - 1) / 2) * cell;
+      const u = {x, z, cnt:0, flash:0, p:box(pw, .1, pd, C.board, {roughness:.6}, x, .05, z), l:[]};
+      for (let j = 0; j < 3; j++) u.l.push(box(.001, .02, pd * .12, C.hot, {emissive:C.hot, emissiveIntensity:.5}, x, .115, z + (j - 1) * pd * .26));
+      U.push(u);
+    }
+    tag(anchor(2, 0, rws * cell / 2 + .2), n + (n === 1 ? ' person' : ' people') + ', each watching their own screen', 'soft', 'down');
+    const each = 200 / n, gapS = 60 / each;
+    R('r-share-each', each >= 10 ? String(Math.round(each)) : String(+each.toFixed(1)));
+    R('r-share-sub', '200 words ÷ ' + n + (n === 1 ? ' person' : ' people'));
+    const st = 15 * gapS;
+    R('r-share-why', 'A 15-word sentence takes ' + (st < 10 ? +st.toFixed(1) + ' seconds' : st < 60 ? Math.round(st) + ' seconds' : +(st / 60).toFixed(1) + ' minutes') + '.');
+    const pool = Array.from({length:8}, () => { const m = box(.16, .16, .16, C.hot, {emissive:C.hot, emissiveIntensity:.9}); m.visible = false; return {m, f:1, u:null}; });
+    aim([-.5, 0, .2], 12, .86, 0);
+    let k = 0;
+    return {
+      on(){ rebuild(); },
+      update(dt){
+        if (b.step(dt, .3)){ const t = pool.find(p => p.f >= 1); if (t){ t.f = 0; t.u = U[k++ % n]; t.m.visible = true; } }
+        pool.forEach(t => {
+          if (t.f >= 1) return;
+          t.f += dt / .75; const f = Math.min(1, t.f);
+          t.m.position.set(bx + (t.u.x - bx) * f, .4 + Math.sin(Math.PI * f) * 1.9, t.u.z * f);
+          if (t.f >= 1){ t.m.visible = false; t.u.cnt++; t.u.flash = 1; burstAt(t.u.p, 5, .2); }
+        });
+        U.forEach(u => {
+          u.flash = Math.max(0, u.flash - dt * 1.6); u.p.material.color.copy(C.board).lerp(C.hot, u.flash * .3);
+          const c = u.cnt % 25, lw = pw * .8;
+          u.l.forEach((m, j) => { const fr = Math.min(1, Math.max(0, (c - j * 8) / 8)); m.scale.x = Math.max(.001, fr * lw); m.position.x = u.x - lw / 2 + fr * lw / 2; });
+        });
+      }
+    };
+  },
+
+  cover(){ return BUILD.recap(4.5); },
+
+  models(){ aim([0, .4, 0], 12.5, .6, 0); return {}; },
+
+  licences(){ aim([0, .4, 0], 12.5, .6, 0); return {}; },
+
+  recap(bx = 3.6){
+    box(5.6, .14, bx, C.desk, {roughness:.9}, bx, .07, 0);
+    const b = openBook({w:1.45, d:1.95, K:18}); b.g.position.set(bx, .14, 0);
+    const nums = fountain(bx, .5, 0, 18, 1.3), top = anchor(bx, 2.2, 0);
+    aim([0, .4, 0], 12.5, .6, 0);
+    return {update(dt){ nums(dt); if (b.step(dt, 1.5)) burstAt(top, 16, 0); }};
+  }
+};
+
+/* ---------- navigation ---------- */
+const prog = $('#prog');
+prog.innerHTML = IDS.map((id, i) => '<button aria-label="Slide ' + (i + 1) + '"></button>').join('');
+prog.addEventListener('click', e => { const b = e.target.closest('button'); if (b) go([...prog.children].indexOf(b)); });
+let pop = 1, popV = 0, popFrom = .84;
+function rebuild(){ clearWorld(); readColors(); cur = renderer ? BUILD[IDS[idx]]() : null; if (!reduce){ pop = popFrom; popV = 0; } popFrom = .84; }
+function go(i, keepHash){
+  idx = Math.max(0, Math.min(IDS.length - 1, i));
+  sections.forEach((s, j) => s.hidden = j !== idx);
+  $('.app').classList.toggle('cover', IDS[idx] === 'cover');
+  [...prog.children].forEach((b, j) => { b.className = j === idx ? 'on' : j < idx ? 'done' : ''; });
+  R('count', (idx + 1) + ' / ' + IDS.length);
+  $('#prev').disabled = idx === 0; $('#next').disabled = idx === IDS.length - 1;
+  rotGoal = 0; world.rotation.y = 0; popFrom = 0; R('bignum', String(idx + 1).padStart(2, '0'));
+  resize(); rebuild();
+  if (!reduce){ camera.position.copy(camGoal.pos).sub(camGoal.look).applyAxisAngle(UP, idx % 2 ? .6 : -.6).multiplyScalar(1.55).add(camGoal.look); camLook.copy(camGoal.look); }
+  clearTimeout(mt); mt = setTimeout(measure, 1000);
+  if (!keepHash){ try { history.replaceState(null, '', '#slide-' + (idx + 1)); } catch (e) {} }
+}
+$('#prev').onclick = () => go(idx - 1);
+$('#next').onclick = () => go(idx + 1);
+addEventListener('keydown', e => {
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  if (['ArrowRight', 'PageDown'].includes(e.key) || (e.key === ' ' && e.target === document.body)){ e.preventDefault(); go(idx + 1); }
+  if (['ArrowLeft', 'PageUp'].includes(e.key)){ e.preventDefault(); go(idx - 1); }
+});
+const fromHash = () => { const m = /^#slide-(\d+)$/.exec(location.hash); return m ? +m[1] - 1 : 0; };
+addEventListener('hashchange', () => { const i = fromHash(); if (i !== idx) go(i, true); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', rebuild);
+new MutationObserver(rebuild).observe(document.documentElement, {attributes:true, attributeFilter:['data-theme']});
+const ro = new ResizeObserver(resize); ro.observe(stage);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+
+syncPressed(); go(fromHash(), true);
+
+let last = performance.now(), now = 0;
+function frame(ts){
+  const dt = Math.min(.05, (ts - last) / 1000); last = ts; now += dt;
+  const k = 1 - Math.exp(-dt * 3);
+  camera.position.lerp(camGoal.pos, k); camLook.lerp(camGoal.look, k); camera.lookAt(camLook);
+  world.rotation.y += (rotGoal + (reduce ? 0 : Math.sin(now * .25) * .08) - world.rotation.y) * (1 - Math.exp(-dt * 4));
+  popV += ((1 - pop) * 130 - popV * 12) * dt; pop += popV * dt; world.scale.setScalar(Math.max(.001, pop));
+  if (!reduce){ grid.position.z = (now * .5) % 1; stars.rotation.y = now * .012; }
+  stepBursts(dt);
+  if (cur && cur.update) cur.update(dt, now);
+  if (renderer){
+    renderer.render(scene, camera); world.updateMatrixWorld();
+    const live = [], ks = 1 - Math.exp(-dt * 14);
+    for (const tg of tags){
+      tg.anc.getWorldPosition(v3); v3.project(camera);
+      if (v3.z > 1 || tg.off){ tg.el.style.opacity = 0; tg.ox = undefined; continue; }
+      const x = (v3.x * .5 + .5) * W, y = (-v3.y * .5 + .5) * H, w = tg.el.offsetWidth, h = tg.el.offsetHeight;
+      tg.w = w; tg.h = h;
+      tg.bx = tg.mode === 'left' ? x - w - 6 : tg.mode === 'right' ? x + 6 : x - w / 2;
+      tg.by = tg.mode === 'left' || tg.mode === 'right' ? y - h / 2 : tg.mode === 'down' ? y + 6 : y - h - 4;
+      tg.x = tg.bx; tg.y = tg.by; live.push(tg);
+    }
+    for (let it = 0; it < 6; it++){
+      for (const a of live){
+        for (const o of obst){
+          const px = Math.min(a.x + a.w, o.r) - Math.max(a.x, o.l), py = Math.min(a.y + a.h, o.b) - Math.max(a.y, o.t);
+          if (px > 0 && py > 0){ if (py <= px * 2) a.y += a.y + a.h / 2 < (o.t + o.b) / 2 ? -py : py; else a.x += a.x + a.w / 2 < (o.l + o.r) / 2 ? -px : px; }
+        }
+        a.x = Math.max(6, Math.min(W - 6 - a.w, a.x)); a.y = Math.max(6, Math.min(H - 6 - a.h, a.y));
+      }
+      for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++){
+        const a = live[i], c = live[j], px = Math.min(a.x + a.w, c.x + c.w) - Math.max(a.x, c.x) + 4, py = Math.min(a.y + a.h, c.y + c.h) - Math.max(a.y, c.y) + 4;
+        if (px > 0 && py > 0){
+          if (py <= px){ const sg = a.by + a.h / 2 <= c.by + c.h / 2 ? -1 : 1; a.y += sg * py / 2; c.y -= sg * py / 2; }
+          else { const sg = a.bx + a.w / 2 <= c.bx + c.w / 2 ? -1 : 1; a.x += sg * px / 2; c.x -= sg * px / 2; }
+        }
+      }
+    }
+    for (const tg of live){
+      const dx = tg.x - tg.bx, dy = tg.y - tg.by;
+      if (tg.ox === undefined){ tg.ox = dx; tg.oy = dy; } else { tg.ox += (dx - tg.ox) * ks; tg.oy += (dy - tg.oy) * ks; }
+      tg.el.style.transform = 'translate(' + (tg.bx + tg.ox).toFixed(1) + 'px,' + (tg.by + tg.oy).toFixed(1) + 'px)';
+      tg.el.style.opacity = 1;
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>
