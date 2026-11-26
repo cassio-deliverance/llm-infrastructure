@@ -4,6 +4,8 @@ An interactive explainer of how a language model works, what it takes to run one
 
 **Open it:** https://cassio-deliverance.github.io/llm-infrastructure/
 
+**Handout (PDF):** [LLM-models-and-infrastructure-handout.pdf](LLM-models-and-infrastructure-handout.pdf), 19 pages: each slide with a plain-words explanation, plus a glossary.
+
 Best viewed on a laptop. Use the arrow keys or the Next button to move between slides, and the buttons on each slide to try things out.
 
 ## What it covers
